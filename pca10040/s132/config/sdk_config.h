@@ -54,6 +54,11 @@
 #define ADV_INTERVAL 300
 #endif
 
+// <s> DEVICE_NAME - Name of device. Will be included in the advertising data.
+#ifndef DEVICE_NAME
+#define DEVICE_NAME "SmartLock"
+#endif
+
 // </h> 
 //==========================================================
 

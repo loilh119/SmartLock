@@ -45,10 +45,13 @@ static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 		uint8_t b[4] = "Lock";
     ble_gatts_evt_write_t const * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
 
-    if ((p_evt_write->handle == p_sml->lock_control_handle.value_handle) && (*p_evt_write->data == 0x11))
+    if ((p_evt_write->handle == p_sml->lock_control_handle.value_handle))
 		{
-			nrf_gpio_pin_set(28);
-					if(nrf_gpio_pin_read(26))
+			if(*p_evt_write->data == 0x11)
+			{
+					nrf_gpio_pin_set(28);
+					p_sml->lock_status = LOCK_OPEN;
+					if(nrf_gpio_pin_read(29))
 					{
 						ble_sml_custom_value_update(p_sml, a);	
 					}
@@ -56,11 +59,12 @@ static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 					{
 						ble_sml_custom_value_update(p_sml, b);	
 					}
-		}
-		else
-		{
-				nrf_gpio_pin_clear(28);
-					if(nrf_gpio_pin_read(26))
+			}
+			else if (*p_evt_write->data == 0x12)
+			{
+					nrf_gpio_pin_clear(28);
+					p_sml->lock_status = LOCK_CLOSE;
+					if(nrf_gpio_pin_read(29))
 					{
 						ble_sml_custom_value_update(p_sml, a);	
 					}
@@ -68,8 +72,9 @@ static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 					{
 						ble_sml_custom_value_update(p_sml, b);	
 					}
+			}	
 		}
-			
+		
 		if ((p_evt_write->handle == p_sml->lock_status_handle.cccd_handle)
         && (p_evt_write->len == 2)
        )
@@ -237,7 +242,7 @@ uint32_t ble_sml_init(ble_sml_t * p_sml, const ble_sml_init_t * p_sml_init)
     // Initialize service structure
 		p_sml->evt_handler							 = p_sml_init->evt_handler;
     p_sml->conn_handle               = BLE_CONN_HANDLE_INVALID;
-
+		p_sml->lock_status               = LOCK_CLOSE;
     // Add Custom Service UUID
     ble_uuid128_t base_uuid = {CUSTOM_SERVICE_UUID_BASE};
     err_code =  sd_ble_uuid_vs_add(&base_uuid, &p_sml->uuid_type);

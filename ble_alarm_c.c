@@ -7,7 +7,7 @@
 #include "ble_srv_common.h"
 #include "app_error.h"
 
-#define NRF_LOG_MODULE_NAME ble_nus_c
+#define NRF_LOG_MODULE_NAME ble_alarm_c
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
@@ -27,30 +27,30 @@ NRF_LOG_MODULE_REGISTER();
  *                        propagates the error code returned by the Database Discovery module API
  *                        @ref ble_db_discovery_evt_register.
  */
-uint32_t ble_alarm_c_init(ble_alarm_c_t * p_ble_nus_c, ble_alarm_c_init_t * p_ble_nus_c_init)
+uint32_t ble_alarm_c_init(ble_alarm_c_t * p_ble_alarm_c, ble_alarm_c_init_t * p_ble_alarm_c_init)
 {
     uint32_t      err_code;
     ble_uuid_t    uart_uuid;
     ble_uuid128_t nus_base_uuid = CUSTOM_SERVICE_CENTRAL_UUID_BASE;
 		
 		
-    VERIFY_PARAM_NOT_NULL(p_ble_nus_c);
-    VERIFY_PARAM_NOT_NULL(p_ble_nus_c_init);
+    VERIFY_PARAM_NOT_NULL(p_ble_alarm_c);
+    VERIFY_PARAM_NOT_NULL(p_ble_alarm_c_init);
 		
 	
-    err_code = sd_ble_uuid_vs_add(&nus_base_uuid, &p_ble_nus_c->uuid_type);
+    err_code = sd_ble_uuid_vs_add(&nus_base_uuid, &p_ble_alarm_c->uuid_type);
 		
 		VERIFY_SUCCESS(err_code);
 		
 
-    uart_uuid.type = p_ble_nus_c->uuid_type;
+    uart_uuid.type = p_ble_alarm_c->uuid_type;
     uart_uuid.uuid = CUSTOM_SERVICE_CENTRAL_UUID;
 
-    p_ble_nus_c->conn_handle           = BLE_CONN_HANDLE_INVALID;
-    p_ble_nus_c->evt_handler           = p_ble_nus_c_init->evt_handler;
-    p_ble_nus_c->handles.nus_tx_handle = BLE_GATT_HANDLE_INVALID;
-    p_ble_nus_c->handles.nus_rx_handle = BLE_GATT_HANDLE_INVALID;
-
+    p_ble_alarm_c->conn_handle           = BLE_CONN_HANDLE_INVALID;
+    p_ble_alarm_c->evt_handler           = p_ble_alarm_c_init->evt_handler;
+    p_ble_alarm_c->handles.nus_tx_handle = BLE_GATT_HANDLE_INVALID;
+    p_ble_alarm_c->handles.nus_rx_handle = BLE_GATT_HANDLE_INVALID;
+		
     return ble_db_discovery_evt_register(&uart_uuid);
 }
 
@@ -113,23 +113,23 @@ void ble_alarm_c_on_db_disc_evt(ble_alarm_c_t * p_ble_alarm_c, ble_db_discovery_
  * @param[in] p_ble_nus_c Pointer to the NUS Client structure.
  * @param[in] p_ble_evt   Pointer to the BLE event received.
  */
-static void on_notify(ble_alarm_c_t * p_ble_alarm_c, ble_evt_t const * p_ble_evt)
-{
-    // HVX can only occur from client sending.
-    if (   (p_ble_alarm_c->handles.nus_tx_handle != BLE_GATT_HANDLE_INVALID)
-        && (p_ble_evt->evt.gattc_evt.params.hvx.handle == p_ble_alarm_c->handles.nus_tx_handle)
-        && (p_ble_alarm_c->evt_handler != NULL))
-    {
-        ble_alarm_c_evt_t ble_alarm_c_evt;
+//static void on_notify(ble_alarm_c_t * p_ble_alarm_c, ble_evt_t const * p_ble_evt)
+//{
+//    // HVX can only occur from client sending.
+//    if (   (p_ble_alarm_c->handles.nus_tx_handle != BLE_GATT_HANDLE_INVALID)
+//        && (p_ble_evt->evt.gattc_evt.params.hvx.handle == p_ble_alarm_c->handles.nus_tx_handle)
+//        && (p_ble_alarm_c->evt_handler != NULL))
+//    {
+//        ble_alarm_c_evt_t ble_alarm_c_evt;
 
-        ble_alarm_c_evt.evt_type = BLE_ALARM_C_EVT_NUS_TX_EVT;
-        ble_alarm_c_evt.p_data   = (uint8_t *)p_ble_evt->evt.gattc_evt.params.hvx.data;
-        ble_alarm_c_evt.data_len = p_ble_evt->evt.gattc_evt.params.hvx.len;
+//        ble_alarm_c_evt.evt_type = BLE_ALARM_C_EVT_NUS_TX_EVT;
+//        ble_alarm_c_evt.p_data   = (uint8_t *)p_ble_evt->evt.gattc_evt.params.hvx.data;
+//        ble_alarm_c_evt.data_len = p_ble_evt->evt.gattc_evt.params.hvx.len;
 
-        p_ble_alarm_c->evt_handler(p_ble_alarm_c, &ble_alarm_c_evt);
-        NRF_LOG_INFO("Client sending data.");
-    }
-}
+//        p_ble_alarm_c->evt_handler(p_ble_alarm_c, &ble_alarm_c_evt);
+//        NRF_LOG_INFO("Client sending data.");
+//    }
+//}
 
 /**@brief     Function for handling BLE events from the SoftDevice.
  *
@@ -159,7 +159,7 @@ void ble_alarm_c_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GATTC_EVT_HVX:
-						on_notify(p_ble_alarm_c, p_ble_evt);
+//						on_notify(p_ble_alarm_c, p_ble_evt);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:

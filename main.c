@@ -34,8 +34,6 @@
 #include "SSD1306.h"
 #include "nrf_drv_gpiote.h"
 
-#define DEVICE_NAME                     "Smart Lock"                       							/**< Name of device. Will be included in the advertising data. */
-
 #define LESC_DEBUG_MODE                 0                                               /**< Set to 1 to use the LESC debug keys. The debug mode allows you to use a sniffer to inspect traffic. */
 #define LESC_MITM_NC                    1                                               /**< Use MITM (Numeric Comparison). */
 
@@ -84,14 +82,13 @@ typedef struct
 } conn_peer_t;
 
 
-BLE_ALARM_C_DEF(m_alarm_c);
-
 NRF_BLE_GATT_DEF(m_gatt);                                                   /**< GATT module instance. */
 NRF_BLE_QWRS_DEF(m_qwr, NRF_SDH_BLE_TOTAL_LINK_COUNT);                      /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);                                         /**< Advertising module instance. */
 BLE_DB_DISCOVERY_DEF(m_db_disc);                                            /**< Database discovery module instance. */
 NRF_BLE_SCAN_DEF(m_scan);                                                   /**< Scanning Module instance. */
 BLE_SML_DEF(m_sml);
+BLE_ALARM_C_DEF(m_alarm_c);
 
 
 static uint16_t           m_conn_handle_hrs_c                = BLE_CONN_HANDLE_INVALID;  /**< Connection handle for the HRS central application. */
@@ -110,14 +107,13 @@ static char * roles_str[] =
 /**@brief Names that the central application scans for, and that are advertised by the peripherals.
  *  If these are set to empty strings, the UUIDs defined below are used.
  */
-static const char m_target_periph_name[] = "";
+static const char m_target_periph_name[] = "Alarm";
 
 
 /**@brief UUIDs that the central application scans for if the name above is set to an empty string,
  * and that are to be advertised by the peripherals.
  */
 static ble_uuid_t m_adv_uuids[] = {{CUSTOM_SERVICE_UUID, BLE_UUID_TYPE_VENDOR_BEGIN}};
-
                                    
 /**@brief Function for handling asserts in the SoftDevice.
  *
@@ -279,51 +275,6 @@ static void filter_settings_change(void)
 }
 
 
-/**@brief Handles events coming from the Heart Rate central module.
- */
-/*static void hrs_c_evt_handler(ble_hrs_c_t * p_hrs_c, ble_hrs_c_evt_t * p_hrs_c_evt)
-{
-    switch (p_hrs_c_evt->evt_type)
-    {
-        case BLE_HRS_C_EVT_DISCOVERY_COMPLETE:
-        {
-            if (m_conn_handle_hrs_c == BLE_CONN_HANDLE_INVALID)
-            {
-                ret_code_t err_code;
-
-                m_conn_handle_hrs_c = p_hrs_c_evt->conn_handle;
-
-                // We do not want to connect to two peripherals offering the same service, so when
-                // a UUID is matched, we check whether we are not already connected to a peer which
-                // offers the same service
-                filter_settings_change();
-
-                NRF_LOG_INFO("CENTRAL: HRS discovered on conn_handle 0x%x",
-                             m_conn_handle_hrs_c);
-
-                err_code = ble_hrs_c_handles_assign(p_hrs_c,
-                                                    m_conn_handle_hrs_c,
-                                                    &p_hrs_c_evt->params.peer_db);
-                APP_ERROR_CHECK(err_code);
-
-                // Heart rate service discovered. Enable notification of Heart Rate Measurement.
-                err_code = ble_hrs_c_hrm_notif_enable(p_hrs_c);
-                APP_ERROR_CHECK(err_code);
-            }
-        } break; // BLE_HRS_C_EVT_DISCOVERY_COMPLETE
-
-        case BLE_HRS_C_EVT_HRM_NOTIFICATION:
-        {
-            NRF_LOG_INFO("CENTRAL: Heart Rate = %d", p_hrs_c_evt->params.hrm.hr_value);
-        } break;
-
-        default:
-            // No implementation needed.
-            break;
-    }
-}*/
-
-
 /**@brief Function for handling characters received by the Nordic UART Service (NUS).
  *
  * @details This function takes a list of characters of length data_len and prints the characters out on UART.
@@ -357,8 +308,8 @@ static void alarm_c_evt_handler(ble_alarm_c_t * p_alarm_c, ble_alarm_c_evt_t * p
 				err_code = ble_alarm_c_handles_assign(p_alarm_c, p_alarm_c_evt->conn_handle, &p_alarm_c_evt->handles);
 				APP_ERROR_CHECK(err_code);
 				
-				err_code = ble_alarm_c_tx_notif_enable(p_alarm_c);
-				APP_ERROR_CHECK(err_code);
+//				err_code = ble_alarm_c_tx_notif_enable(p_alarm_c);
+//				APP_ERROR_CHECK(err_code);
 				NRF_LOG_INFO("Connected to device");
 				break;
 			case BLE_ALARM_C_EVT_NUS_TX_EVT:
@@ -472,6 +423,8 @@ static void on_ble_evt(uint16_t conn_handle, ble_evt_t const * p_ble_evt)
                          nrf_log_push(roles_str[role]),
                          nrf_log_push((char*)passkey),
                          p_ble_evt->evt.gap_evt.params.passkey_display.match_request);
+												 
+												 
 //						ssd1306_clear_screen(0x00);				
 //						ssd1306_display_string(18, 0, passkey, 16, 1);
 //						ssd1306_refresh_gram();
@@ -546,7 +499,7 @@ static void on_ble_central_evt(ble_evt_t const * p_ble_evt)
             // If no Heart Rate Sensor is currently connected, try to find them on this peripheral.
             if (m_conn_handle_hrs_c == BLE_CONN_HANDLE_INVALID)
             {
-                NRF_LOG_INFO("CENTRAL: Searching for HRS on conn_handle 0x%x", p_gap_evt->conn_handle);
+                NRF_LOG_INFO("CENTRAL: Searching for Client on conn_handle 0x%x", p_gap_evt->conn_handle);
 
                 err_code = ble_db_discovery_start(&m_db_disc, p_gap_evt->conn_handle);
                 APP_ERROR_CHECK(err_code);
@@ -863,13 +816,11 @@ static void on_num_comp_button_press(bool accept)
  */
 static void bsp_event_handler(bsp_event_t event)
 {
-		uint8_t a = 0x21;
 		NRF_LOG_INFO("num event %d", event);
     switch (event)
     {
         case BSP_EVENT_KEY_0:
-					NRF_LOG_INFO("SEND.....");
-					ble_alarm_c_string_send(&m_alarm_c, &a, 1);
+
 					NRF_LOG_INFO("debug button 1st");
 
 					NRF_LOG_INFO("debug button 3rd");
@@ -899,7 +850,7 @@ static void buttons_leds_init(bool * p_erase_bonds)
     ret_code_t err_code;
     bsp_event_t startup_event;
 		
-		nrf_gpio_cfg_input(26, NRF_GPIO_PIN_PULLDOWN);
+		nrf_gpio_cfg_input(29, NRF_GPIO_PIN_PULLDOWN);
 		nrf_gpio_cfg_output(28);
 		nrf_gpio_pin_clear(28);
 	
@@ -1032,8 +983,8 @@ static void advertising_init(void)
 		init.srdata.name_type								 = BLE_ADVDATA_FULL_NAME;
 		init.srdata.include_appearance			 = true;
 		
-//		init.advdata.name_type							 = BLE_ADVDATA_FULL_NAME;
-//		init.advdata.include_appearance			 = true;
+		init.advdata.name_type							 = BLE_ADVDATA_FULL_NAME;
+		init.advdata.include_appearance			 = true;
     init.advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
     init.advdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
     init.advdata.uuids_complete.p_uuids  = m_adv_uuids;
@@ -1140,12 +1091,13 @@ static void services_init(void)
 void in_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
 		uint8_t alarm = 0x55;
-    if(nrf_gpio_pin_read(29))
+    if(nrf_gpio_pin_read(29) && m_sml.lock_status == LOCK_CLOSE)
 		{
 			ble_alarm_c_string_send(&m_alarm_c, &alarm, sizeof(alarm));
 		}
 }
 /**
+
  * @brief Function for configuring: PIN_IN pin for input, PIN_OUT pin for output,
  * and configures GPIOTE to give an interrupt on pin change.
  */
@@ -1169,6 +1121,7 @@ static void gpio_init(void)
 
     nrf_drv_gpiote_in_event_enable(29, true);
 }
+
 int main(void)
 {
     bool erase_bonds;
@@ -1178,22 +1131,26 @@ int main(void)
 //		ssd1306_clear_screen(0x00);
 //		ssd1306_display_string(18, 1, "SMART LOCK", 15, 1);
 //		ssd1306_refresh_gram();
+	
     log_init();
     timer_init();
 		gpio_init();	
     buttons_leds_init(&erase_bonds);
     power_management_init();
     ble_stack_init();
-    scan_init();
-    gap_params_init();
+		
+		scan_init();
+		gap_params_init();
     gatt_init();
     conn_params_init();
     db_discovery_init();
     qwr_init();
 		services_init();
-		alarm_c_init();
+		
     peer_manager_init();
     advertising_init();
+		
+		alarm_c_init();
 		
     // Start execution.
     NRF_LOG_INFO("LE Secure Connections example started.");

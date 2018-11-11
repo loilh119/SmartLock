@@ -22,7 +22,11 @@ NRF_SDH_BLE_OBSERVER(_name ## _obs,                                             
                      BLE_HRS_BLE_OBSERVER_PRIO,                                                     \
                      ble_sml_on_ble_evt, &_name)
 
-
+typedef enum
+{
+	LOCK_OPEN,
+	LOCK_CLOSE
+}lock_sta;
 
 // Forward declaration of the ble_hrs_t type.
 typedef struct ble_sml_s ble_sml_t;
@@ -60,6 +64,7 @@ struct ble_sml_s
     ble_gatts_char_handles_t      lock_status_handle;           /**< Handles related to the Custom Value characteristic. */
 		uint16_t                      conn_handle;                    /**< Handle of the current connection (as provided by the BLE stack, is BLE_CONN_HANDLE_INVALID if not in a connection). */
     uint8_t                       uuid_type; 
+		lock_sta											lock_status;
 };
 
 

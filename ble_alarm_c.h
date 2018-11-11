@@ -15,19 +15,18 @@
  */
 #define BLE_ALARM_C_DEF(_name)                                                                        \
 static ble_alarm_c_t _name;                                                                           \
-NRF_SDH_BLE_OBSERVER(_name ## _obs,                                                                 \
-                     BLE_NUS_C_BLE_OBSERVER_PRIO,                                                   \
+NRF_SDH_BLE_OBSERVER(_name ## _obs,                                                                 	\
+                     BLE_NUS_C_BLE_OBSERVER_PRIO,                                                   	\
                      ble_alarm_c_on_ble_evt, &_name)
 
 #define CUSTOM_SERVICE_CENTRAL_UUID_BASE         {0x4C, 0x0D, 0x36, 0xE1 , 0x59 , 0x09 , 0x27 , 0x8B , \
 																									0x73 , 0x45 , 0x11 , 0x8A, 0x97 , 0x55, 0xED, 0x4D}
 
-
-#define CUSTOM_SERVICE_CENTRAL_UUID               0x1500
-#define ALARM_TX_VALUE_CHAR_UUID          				0x1501
-#define ALARM_RX_VALUE_CHAR_UUID          				0x1502	
+#define CUSTOM_SERVICE_CENTRAL_UUID               0x2501
+#define ALARM_TX_VALUE_CHAR_UUID          				0x2502
+#define ALARM_RX_VALUE_CHAR_UUID          				0x2503	
 																					
-																					
+																									
 #define OPCODE_LENGTH 1
 #define HANDLE_LENGTH 2
 
@@ -38,7 +37,6 @@ NRF_SDH_BLE_OBSERVER(_name ## _obs,                                             
     #define BLE_NUS_MAX_DATA_LEN (BLE_GATT_MTU_SIZE_DEFAULT - OPCODE_LENGTH - HANDLE_LENGTH)
     #warning NRF_SDH_BLE_GATT_MAX_MTU_SIZE is not defined.
 #endif
-																					
 
 /**@brief NUS Client event type. */
 typedef enum
