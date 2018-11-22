@@ -345,7 +345,7 @@ void ssd1306_display_num(uint8_t chXpos, uint8_t chYpos, uint32_t chNum, uint8_t
   *         
   * @retval  None
 **/
-void ssd1306_display_string(uint8_t chXpos, uint8_t chYpos, const uint8_t *pchString, uint8_t chSize, uint8_t chMode)
+void ssd1306_display_string(uint8_t chXpos, uint8_t chYpos, const char *pchString, uint8_t chSize, uint8_t chMode)
 {
     while (*pchString != '\0') {       
         if (chXpos > (SSD1306_WIDTH - chSize / 2)) {

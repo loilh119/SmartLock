@@ -5,7 +5,8 @@
 #include "nrf_gpio.h"
 #include "boards.h"
 #include "nrf_log.h"
-
+#include "R301.h"
+#include "nrf_delay.h"
 static void on_connect(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 {
     p_sml->conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
@@ -41,43 +42,72 @@ static void on_disconnect(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
  */
 static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 {
-		uint8_t a[4] = "Open";
-		uint8_t b[4] = "Lock";
+		char *a = "ULCK";
+		char *b = "LCKD";
+	  char *c = "ERRO";
+
     ble_gatts_evt_write_t const * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
 
     if ((p_evt_write->handle == p_sml->lock_control_handle.value_handle))
 		{
 			if(*p_evt_write->data == 0x11)
-			{
-					nrf_gpio_pin_set(28);
-					p_sml->lock_status = LOCK_OPEN;
-					if(nrf_gpio_pin_read(29))
+			{				
+					ble_sml_evt_t ble_sml_c_evt;
+
+					ble_sml_c_evt.evt_type = BLE_SML_EVT_LOCK_OPEN;
+
+					p_sml->evt_handler(p_sml,&ble_sml_c_evt);
+					
+					if(!nrf_gpio_pin_read(25))
 					{
+						p_sml->lock_status = LOCK_OPEN;
 						ble_sml_custom_value_update(p_sml, a);	
 					}
 					else
 					{
-						ble_sml_custom_value_update(p_sml, b);	
+						ble_sml_custom_value_update(p_sml, c);	
 					}
 			}
 			else if (*p_evt_write->data == 0x12)
-			{
-					nrf_gpio_pin_clear(28);
-					p_sml->lock_status = LOCK_CLOSE;
-					if(nrf_gpio_pin_read(29))
+			{					
+					if(nrf_gpio_pin_read(25))
 					{
-						ble_sml_custom_value_update(p_sml, a);	
+						p_sml->lock_status = LOCK_CLOSE;
+						ble_sml_custom_value_update(p_sml, b);	
 					}
 					else
 					{
-						ble_sml_custom_value_update(p_sml, b);	
+						ble_sml_custom_value_update(p_sml, c);	
 					}
-			}	
+			}
+			else if (*p_evt_write->data == 0x13)
+			{
+					ble_sml_evt_t ble_sml_c_evt;
+
+					ble_sml_c_evt.evt_type = BLE_SML_EVT_FINGER;
+
+					p_sml->evt_handler(p_sml,&ble_sml_c_evt);
+			}
+			else if(*p_evt_write->data == 0x14)
+			{
+					ble_sml_evt_t evt;
+
+					evt.evt_type = BLE_SML_EVT_DELETE_FINGER;
+
+					p_sml->evt_handler(p_sml,&evt);
+			}
+			else if(*p_evt_write->data == 0x15)
+			{
+					ble_sml_evt_t evt;
+
+					evt.evt_type = BLE_SML_EVT_CANCEL;
+
+					p_sml->evt_handler(p_sml,&evt);
+			}
 		}
 		
 		if ((p_evt_write->handle == p_sml->lock_status_handle.cccd_handle)
-        && (p_evt_write->len == 2)
-       )
+        && (p_evt_write->len == 2))
     {
         // CCCD written, call application event handler
         if (p_sml->evt_handler != NULL)
@@ -95,8 +125,8 @@ static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
             // Call the application event handler.
             p_sml->evt_handler(p_sml, &evt);
         }
-			}
 		}
+}
 
 
 void ble_sml_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
@@ -206,9 +236,9 @@ static uint32_t custom_value_char_add(ble_sml_t * p_sml, const ble_sml_init_t * 
 
     attr_char_value_2.p_uuid    = &ble_uuid;
     attr_char_value_2.p_attr_md = &attr_md;
-    attr_char_value_2.init_len  = sizeof(uint8_t);
+    attr_char_value_2.init_len  = sizeof(uint32_t);
     attr_char_value_2.init_offs = 0;
-    attr_char_value_2.max_len   = sizeof(uint8_t);
+    attr_char_value_2.max_len   = sizeof(uint32_t);
 
 		memset(&cccd_md_2, 0, sizeof(cccd_md_2));
 
@@ -260,7 +290,7 @@ uint32_t ble_sml_init(ble_sml_t * p_sml, const ble_sml_init_t * p_sml_init)
     return custom_value_char_add(p_sml, p_sml_init);;
 }
 
-uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, uint8_t * custom_value)
+uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, char * custom_value)
 {
     NRF_LOG_INFO("In ble_sml_custom_value_update. \r\n"); 
     if (p_sml == NULL)
@@ -276,7 +306,7 @@ uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, uint8_t * custom_value)
 
     gatts_value.len     = sizeof(uint8_t);
     gatts_value.offset  = 0;
-    gatts_value.p_value = custom_value;
+    gatts_value.p_value = (uint8_t *)custom_value;
 
     // Update database.
     err_code = sd_ble_gatts_value_set(p_sml->conn_handle,

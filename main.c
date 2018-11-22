@@ -33,6 +33,9 @@
 #include "ble_alarm_c.h"
 #include "SSD1306.h"
 #include "nrf_drv_gpiote.h"
+#include "app_uart.h"
+#include "nrf_uart.h"
+#include "R301.h"
 
 #define LESC_DEBUG_MODE                 0                                               /**< Set to 1 to use the LESC debug keys. The debug mode allows you to use a sniffer to inspect traffic. */
 #define LESC_MITM_NC                    1                                               /**< Use MITM (Numeric Comparison). */
@@ -68,7 +71,11 @@
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                           /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                          /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                               /**< Number of attempts before giving up the connection parameter negotiation. */
+#define UART_TIMER					            APP_TIMER_TICKS(800)
+#define LOCK_TIMER					            APP_TIMER_TICKS(3000)
 
+#define UART_TX_BUF_SIZE 256                         /**< UART TX buffer size. */
+#define UART_RX_BUF_SIZE 256                         /**< UART RX buffer size. */
 /**@brief   Priority of the application BLE event handler.
  * @note    There is no need to modify this value.
  */
@@ -81,6 +88,11 @@ typedef struct
     ble_gap_addr_t address;
 } conn_peer_t;
 
+static int status_scan_finger = 0;
+static int status_confirm_finger = 0;
+static volatile bool scan_int_act = true;
+static volatile bool scan_finger_act = true;
+static volatile bool delete_finger_act = true;
 
 NRF_BLE_GATT_DEF(m_gatt);                                                   /**< GATT module instance. */
 NRF_BLE_QWRS_DEF(m_qwr, NRF_SDH_BLE_TOTAL_LINK_COUNT);                      /**< Context for the Queued Write module.*/
@@ -89,6 +101,10 @@ BLE_DB_DISCOVERY_DEF(m_db_disc);                                            /**<
 NRF_BLE_SCAN_DEF(m_scan);                                                   /**< Scanning Module instance. */
 BLE_SML_DEF(m_sml);
 BLE_ALARM_C_DEF(m_alarm_c);
+APP_TIMER_DEF(scan_finger);
+APP_TIMER_DEF(scan_int);
+APP_TIMER_DEF(delete_finger);
+APP_TIMER_DEF(lock);
 
 
 static uint16_t           m_conn_handle_hrs_c                = BLE_CONN_HANDLE_INVALID;  /**< Connection handle for the HRS central application. */
@@ -141,6 +157,47 @@ static void conn_params_error_handler(uint32_t nrf_error)
     APP_ERROR_HANDLER(nrf_error);
 }
 
+void uart_handle(app_uart_evt_t * p_event)
+{
+    if (p_event->evt_type == APP_UART_COMMUNICATION_ERROR)
+    {
+        APP_ERROR_HANDLER(p_event->data.error_communication);
+    }
+    else if (p_event->evt_type == APP_UART_FIFO_ERROR)
+    {
+        APP_ERROR_HANDLER(p_event->data.error_code);
+    }else if (p_event->evt_type == APP_UART_DATA_READY)
+		{
+			handler_uart();
+		}
+}
+
+void init_uart()
+{
+	  uint32_t                     err_code;
+    app_uart_comm_params_t const comm_params =
+    {
+        .rx_pin_no    = RX_PIN_NUMBER,
+        .tx_pin_no    = TX_PIN_NUMBER,
+        .rts_pin_no   = RTS_PIN_NUMBER,
+        .cts_pin_no   = CTS_PIN_NUMBER,
+        .flow_control = APP_UART_FLOW_CONTROL_DISABLED,
+        .use_parity   = false,
+#if defined (UART_PRESENT)
+        .baud_rate    = NRF_UART_BAUDRATE_115200
+#else
+        .baud_rate    = NRF_UARTE_BAUDRATE_115200
+#endif
+    };
+
+    APP_UART_FIFO_INIT(&comm_params,
+                       UART_RX_BUF_SIZE,
+                       UART_TX_BUF_SIZE,
+                       uart_handle,
+                       APP_IRQ_PRIORITY_LOWEST,
+                       err_code);
+    APP_ERROR_CHECK(err_code);
+}
 
 /**@brief Function for handling Scanning Module events.
  */
@@ -424,10 +481,10 @@ static void on_ble_evt(uint16_t conn_handle, ble_evt_t const * p_ble_evt)
                          nrf_log_push((char*)passkey),
                          p_ble_evt->evt.gap_evt.params.passkey_display.match_request);
 												 
-												 
-//						ssd1306_clear_screen(0x00);				
-//						ssd1306_display_string(18, 0, passkey, 16, 1);
-//						ssd1306_refresh_gram();
+						ssd1306_clear_screen(0x00);
+						ssd1306_display_string(32, 14, "PASS KEY", 16, 1);						 
+						ssd1306_display_string(37, 31, (char*)passkey, 16, 1);
+						ssd1306_refresh_gram();
 												 
             if (p_ble_evt->evt.gap_evt.params.passkey_display.match_request)
             {
@@ -444,6 +501,7 @@ static void on_ble_evt(uint16_t conn_handle, ble_evt_t const * p_ble_evt)
             break;
 
          case BLE_GAP_EVT_AUTH_STATUS:
+					 				 
              NRF_LOG_INFO("%s: BLE_GAP_EVT_AUTH_STATUS: status=0x%x bond=0x%x lv4: %d kdist_own:0x%x kdist_peer:0x%x",
                           nrf_log_push(roles_str[role]),
                           p_ble_evt->evt.gap_evt.params.auth_status.auth_status,
@@ -684,7 +742,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     }
 }
 
-
 static void alarm_c_init(void)
 {
 		ret_code_t					err_code;
@@ -695,6 +752,7 @@ static void alarm_c_init(void)
 		err_code = ble_alarm_c_init(&m_alarm_c, &init);
 		APP_ERROR_CHECK(err_code);
 }
+
 /**@brief Function for initializing the BLE stack.
  *
  * @details Initializes the SoftDevice and the BLE event interrupts.
@@ -821,17 +879,25 @@ static void bsp_event_handler(bsp_event_t event)
     {
         case BSP_EVENT_KEY_0:
 
-					NRF_LOG_INFO("debug button 1st");
+//					NRF_LOG_INFO("debug button 1st");
 
-					NRF_LOG_INFO("debug button 3rd");
-
+//					NRF_LOG_INFO("debug button 3rd");
+					ssd1306_clear_screen(0x00);
+					ssd1306_display_string(32, 20, "ACCEPT", 16, 1);						 
+					ssd1306_refresh_gram();
+					ssd1306_clear_screen(0x00);
+				
           on_num_comp_button_press(true);
           break;
 
       case BSP_EVENT_KEY_1:
-				
-            on_num_comp_button_press(false);
-						NRF_LOG_INFO("debug button 5th");
+						
+					ssd1306_clear_screen(0x00);
+					ssd1306_display_string(32, 20, "REJECT", 16, 1);						 
+					ssd1306_refresh_gram();
+					ssd1306_clear_screen(0x00);
+          on_num_comp_button_press(false);
+//						NRF_LOG_INFO("debug button 5th");
             break;
 
         default:
@@ -850,7 +916,15 @@ static void buttons_leds_init(bool * p_erase_bonds)
     ret_code_t err_code;
     bsp_event_t startup_event;
 		
+	
+		nrf_gpio_cfg_output(LED_3);
+		nrf_gpio_cfg_output(LED_2);
+		nrf_gpio_cfg_output(LED_4);
+	
 		nrf_gpio_cfg_input(29, NRF_GPIO_PIN_PULLDOWN);
+		nrf_gpio_cfg_input(25, NRF_GPIO_PIN_PULLDOWN);
+		nrf_gpio_cfg_input(4, NRF_GPIO_PIN_PULLDOWN);
+	
 		nrf_gpio_cfg_output(28);
 		nrf_gpio_pin_clear(28);
 	
@@ -1011,12 +1085,277 @@ static void log_init(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
+/**@brief Function for handling the Battery measurement timer timeout.
+ *
+ * @details This function will be called each time the battery level measurement timer expires.
+ *
+ * @param[in] p_context  Pointer used for passing some arbitrary information (context) from the
+ *                       app_start_timer() call to the timeout handler.
+ */
+static void scan_finger_handler(void * p_context)
+{
+		ret_code_t err_code;
+    UNUSED_PARAMETER(p_context);		
+    // Increment the value of m_custom_value before nortifing it.
+		
+		if(scan_finger_act == true)
+		{
+			switch(status_scan_finger)
+			{
+				case 0:	
+					delay(200);
+					if(check_sum(4,12) == 0x00)
+					{
+						nrf_gpio_pin_clear(LED_3);
+						reset_buffer();
+						status_scan_finger = 1;
+						break;
+					}
+					else
+					{
+						reset_buffer();
+					}
+					Collect_Finger();
+					break;
+				case 1:				
+					delay(200);
+					if(check_sum(4,12) == 0x00)
+					{
+						nrf_gpio_pin_set(LED_3);
+						reset_buffer();
+						status_scan_finger = 2;
+						break;
+					}
+					else
+					{
+						reset_buffer();
+					}
+					Generate_Character(1);
+					break;
+					
+				case 2:	
+					delay(200);
+					if(check_sum(4,12) == 0x00)
+					{
+						nrf_gpio_pin_clear(LED_3);
+						reset_buffer();
+						status_scan_finger = 3;
+						break;
+					}
+					else
+					{
+						reset_buffer();
+					}
+					Collect_Finger();
+					break;
+				case 3:		
+					delay(200);				
+					if(check_sum(4,12) == 0x00)
+					{
+						nrf_gpio_pin_set(LED_3);
+						reset_buffer();
+						status_scan_finger = 4;
+						break;
+					}
+					else
+					{
+						reset_buffer();
+					}
+					Generate_Character(2);
+					break;
+				case 4:		
+				delay(200);				
+					if(check_sum(4,12) == 0x00)
+					{
+						nrf_gpio_pin_clear(LED_3);
+						reset_buffer();
+						status_scan_finger = 5;
+						break;
+					}
+					else
+					{
+						reset_buffer();
+					}
+					Generate_Template();
+					break;
+				case 5:		
+					delay(200);
+					if(check_sum(4,12) == 0x00)
+					{
+						nrf_gpio_pin_set(LED_3);
+						reset_buffer();
+						
+						status_scan_finger = 0;
+						
+						scan_int_act = true;
+						delete_finger_act = true;
+						
+						err_code = app_timer_stop(scan_finger);
+						APP_ERROR_CHECK(err_code);
+						break;
+					}
+					else
+					{
+						reset_buffer();
+					}
+					Store_Template(1, 1);
+				default:
+					break;
+			}
+		}
+}
 
+static void delete_finger_handler(void * p_context)
+{
+		ret_code_t err_code;
+    UNUSED_PARAMETER(p_context);
+		int temp = 0;	
+		delay(200);
+		if(delete_finger_act == true)
+		{
+			if(check_sum(4,12) == 0x00)
+			{
+				nrf_gpio_pin_clear(LED_3);
+				reset_buffer();
+				
+				scan_int_act = true;
+				scan_finger_act = true;
+
+				err_code = app_timer_stop(delete_finger);
+				APP_ERROR_CHECK(err_code);
+				temp = 1;
+			}
+			else
+			{
+				reset_buffer();
+			}
+			if(temp == 0)
+			{
+				Library_Empty();
+			}
+		}
+}
+
+static void lock_handler(void * p_context)
+{
+		ret_code_t err_code;
+    UNUSED_PARAMETER(p_context);
+		nrf_gpio_pin_clear(28);
+	
+		err_code = app_timer_stop(lock);
+		APP_ERROR_CHECK(err_code);
+	
+		
+}
+
+static void scan_int_handler(void * p_context)
+{
+		ret_code_t err_code;  
+		UNUSED_PARAMETER(p_context);	
+		if(scan_int_act == true)
+		{
+			switch(status_confirm_finger)
+			{
+				case 0:	
+					delay(200);
+					if(check_sum(4,12) == 0x00)
+					{
+//						nrf_gpio_pin_clear(LED_3);
+						reset_buffer();
+						status_confirm_finger = 1;
+						break;
+					}
+					else
+					{
+						reset_buffer();
+						Collect_Finger();
+						break;
+					}
+				case 1:		
+					delay(200);		
+					if(check_sum(4,12) == 0x00)
+					{
+//						nrf_gpio_pin_set(LED_3);
+						reset_buffer();
+						status_confirm_finger = 2;
+						break;
+					}
+					else
+					{
+						reset_buffer();
+						Generate_Character(1);
+						break;
+					}
+				case 2:
+					delay(200);
+					if(check_sum(8,16) == 0x00)
+					{
+//						nrf_gpio_pin_clear(LED_3);
+						
+						reset_buffer();
+						status_confirm_finger = 5;
+
+						scan_finger_act = true;
+						delete_finger_act = true;
+						nrf_gpio_pin_set(28);
+						m_sml.lock_status = LOCK_OPEN;
+						err_code = app_timer_stop(scan_int);
+						APP_ERROR_CHECK(err_code);
+						
+//						err_code = app_timer_stop_all();
+//						APP_ERROR_CHECK(err_code);
+						err_code = app_timer_start(lock, LOCK_TIMER, NULL);
+						APP_ERROR_CHECK(err_code);
+						break;
+					}
+					else if(check_sum(8,16) == 0x09)
+					{
+//						nrf_gpio_pin_set(LED_3);
+//						nrf_gpio_pin_clear(LED_4);
+						reset_buffer();
+						status_confirm_finger = 0;
+						
+						scan_finger_act = true;
+						delete_finger_act = true;					
+						err_code = app_timer_stop(scan_int);
+						APP_ERROR_CHECK(err_code);
+						break;
+					}
+					else
+					{
+//						nrf_gpio_pin_set(LED_4);
+						reset_buffer();
+						Search_Finger(1, 15);
+						break;
+					}
+				case 5:
+					status_confirm_finger = 0;
+					err_code = app_timer_stop(scan_int);
+					APP_ERROR_CHECK(err_code);
+					break;
+				default:
+					break;
+			}
+		}
+}
 /**@brief Function for initializing the timer. */
 static void timer_init(void)
 {
     ret_code_t err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
+		
+		err_code = app_timer_create(&scan_finger, APP_TIMER_MODE_REPEATED, scan_finger_handler);
+    APP_ERROR_CHECK(err_code);
+	
+		err_code = app_timer_create(&delete_finger, APP_TIMER_MODE_REPEATED, delete_finger_handler);
+    APP_ERROR_CHECK(err_code);
+	
+		err_code = app_timer_create(&scan_int, APP_TIMER_MODE_REPEATED, scan_int_handler);
+    APP_ERROR_CHECK(err_code);
+	
+		err_code = app_timer_create(&lock, APP_TIMER_MODE_REPEATED, lock_handler);
+    APP_ERROR_CHECK(err_code);
+	
 }
 
 
@@ -1050,12 +1389,21 @@ static void idle_state_handle(void)
 static void on_sml_evt(ble_sml_t     * p_sml_service,
                        ble_sml_evt_t * p_evt)
 {
+		ret_code_t err_code;
     switch(p_evt->evt_type)
     {
         case BLE_SML_EVT_CONNECTED:
+						ssd1306_clear_screen(0x00);
+						ssd1306_display_string(25, 20, "CONNECTING", 16, 1);						 
+						ssd1306_refresh_gram();
+						ssd1306_clear_screen(0x00);
             break;
 
         case BLE_SML_EVT_DISCONNECTED:
+							ssd1306_clear_screen(0x00);
+							ssd1306_display_string(25, 20, "DISCONNECT", 16, 1);	
+							ssd1306_refresh_gram();
+							ssd1306_clear_screen(0x00);
               break;
 				
 				case BLE_SML_EVT_NOTIFICATION_ENABLED:
@@ -1063,6 +1411,36 @@ static void on_sml_evt(ble_sml_t     * p_sml_service,
 
         case BLE_SML_EVT_NOTIFICATION_DISABLED:
             break;
+				case BLE_SML_EVT_LOCK_OPEN:
+					nrf_gpio_pin_set(28);
+					
+					err_code = app_timer_start(lock, LOCK_TIMER, NULL);
+					APP_ERROR_CHECK(err_code);
+						break;
+				
+				case BLE_SML_EVT_FINGER:
+					
+					scan_int_act = false;
+					delete_finger_act = false;
+				
+					err_code = app_timer_start(scan_finger, UART_TIMER, NULL);
+					APP_ERROR_CHECK(err_code);
+					break;
+				case BLE_SML_EVT_DELETE_FINGER:	
+					
+					scan_int_act = false;
+					scan_finger_act = false;
+				
+					err_code = app_timer_start(delete_finger, UART_TIMER, NULL);
+					APP_ERROR_CHECK(err_code);
+					break;
+				
+				case BLE_SML_EVT_CANCEL:
+					scan_int_act = true;
+					scan_finger_act = true;
+					delete_finger_act = true;
+					err_code = app_timer_stop_all();
+					APP_ERROR_CHECK(err_code);
         default:
               // No implementation needed.
               break;
@@ -1088,13 +1466,32 @@ static void services_init(void)
     APP_ERROR_CHECK(err_code);	
 }
 
-void in_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+void finger_scan(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
-		uint8_t alarm = 0x55;
-    if(nrf_gpio_pin_read(29) && m_sml.lock_status == LOCK_CLOSE)
+	ret_code_t err_code;
+	nrf_gpio_pin_toggle(LED_2);
+	if(nrf_gpio_pin_read(4) == 0)
+	{
+		if(scan_int_act == true)
 		{
-			ble_alarm_c_string_send(&m_alarm_c, &alarm, sizeof(alarm));
+			nrf_gpio_pin_toggle(LED_4);
+			
+			scan_finger_act = false;
+			delete_finger_act = false;
+			
+			err_code = app_timer_start(scan_int, UART_TIMER, NULL);
+			APP_ERROR_CHECK(err_code);
 		}
+	}
+}
+
+void sensor(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+{
+	uint8_t a[1] = {0x55};
+	if(!nrf_gpio_pin_read(29) && m_sml.lock_status == LOCK_CLOSE)
+	{
+		ble_alarm_c_string_send(&m_alarm_c, a, 1);
+	}
 }
 /**
 
@@ -1104,7 +1501,7 @@ void in_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 static void gpio_init(void)
 {
     ret_code_t err_code;
-
+	
     err_code = nrf_drv_gpiote_init();
     APP_ERROR_CHECK(err_code);
 
@@ -1113,28 +1510,39 @@ static void gpio_init(void)
     err_code = nrf_drv_gpiote_out_init(LED_4, &out_config);
     APP_ERROR_CHECK(err_code);
 
-    nrf_drv_gpiote_in_config_t in_config = GPIOTE_CONFIG_IN_SENSE_TOGGLE(true);
+    nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_HITOLO(true);
     in_config.pull = NRF_GPIO_PIN_PULLDOWN;
 
-    err_code = nrf_drv_gpiote_in_init(29, &in_config, in_pin_handler);
+    err_code = nrf_drv_gpiote_in_init(4, &in_config, finger_scan);
     APP_ERROR_CHECK(err_code);
-
+		
+    nrf_drv_gpiote_in_event_enable(4, true);
+		
+		nrf_drv_gpiote_in_config_t in_config1 = NRFX_GPIOTE_CONFIG_IN_SENSE_LOTOHI(true);
+    in_config.pull = NRF_GPIO_PIN_PULLUP;
+		
+		err_code = nrf_drv_gpiote_in_init(29, &in_config1, sensor);
+    APP_ERROR_CHECK(err_code);
+		
     nrf_drv_gpiote_in_event_enable(29, true);
 }
+
 
 int main(void)
 {
     bool erase_bonds;
     // Initialize.
-//		twi_init();
-//		ssd1306_init();
-//		ssd1306_clear_screen(0x00);
-//		ssd1306_display_string(18, 1, "SMART LOCK", 15, 1);
-//		ssd1306_refresh_gram();
+		twi_init();
+		ssd1306_init(); 
+		ssd1306_clear_screen(0x00);
+		ssd1306_display_string(25, 20, "SMART LOCK", 16, 1);
+		ssd1306_refresh_gram();
 	
+		init_uart();
     log_init();
     timer_init();
 		gpio_init();	
+		
     buttons_leds_init(&erase_bonds);
     power_management_init();
     ble_stack_init();
@@ -1151,7 +1559,6 @@ int main(void)
     advertising_init();
 		
 		alarm_c_init();
-		
     // Start execution.
     NRF_LOG_INFO("LE Secure Connections example started.");
 

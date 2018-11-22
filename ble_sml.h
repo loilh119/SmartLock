@@ -36,7 +36,11 @@ typedef enum
 	BLE_SML_EVT_NOTIFICATION_ENABLED,                             /**< Custom value notification enabled event. */
   BLE_SML_EVT_NOTIFICATION_DISABLED,
 	BLE_SML_EVT_CONNECTED,
-	BLE_SML_EVT_DISCONNECTED
+	BLE_SML_EVT_DISCONNECTED,
+	BLE_SML_EVT_LOCK_OPEN,
+	BLE_SML_EVT_FINGER,
+	BLE_SML_EVT_DELETE_FINGER,
+	BLE_SML_EVT_CANCEL
 } ble_sml_evt_type_t;
 
 typedef struct
@@ -89,5 +93,5 @@ uint32_t ble_sml_init(ble_sml_t * p_sml, ble_sml_init_t const * p_sml_init);
  */
 void ble_sml_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context);
 
-uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, uint8_t * custom_value);
+uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, char * custom_value);
 
