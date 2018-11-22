@@ -58,9 +58,10 @@ static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 
 					p_sml->evt_handler(p_sml,&ble_sml_c_evt);
 					
-					if(!nrf_gpio_pin_read(25))
+					p_sml->lock_status = LOCK_OPEN;
+					if(nrf_gpio_pin_read(25) == 0)
 					{
-						p_sml->lock_status = LOCK_OPEN;
+//						p_sml->lock_status = LOCK_OPEN;
 						ble_sml_custom_value_update(p_sml, a);	
 					}
 					else
@@ -70,9 +71,10 @@ static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 			}
 			else if (*p_evt_write->data == 0x12)
 			{					
-					if(nrf_gpio_pin_read(25))
+					p_sml->lock_status = LOCK_CLOSE;
+					if(nrf_gpio_pin_read(25) == 1)
 					{
-						p_sml->lock_status = LOCK_CLOSE;
+						
 						ble_sml_custom_value_update(p_sml, b);	
 					}
 					else

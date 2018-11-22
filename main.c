@@ -1488,7 +1488,7 @@ void finger_scan(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 void sensor(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
 	uint8_t a[1] = {0x55};
-	if(!nrf_gpio_pin_read(29) && m_sml.lock_status == LOCK_CLOSE)
+	if(nrf_gpio_pin_read(29) == 1 && m_sml.lock_status == LOCK_CLOSE)
 	{
 		ble_alarm_c_string_send(&m_alarm_c, a, 1);
 	}
