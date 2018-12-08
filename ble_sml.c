@@ -42,7 +42,7 @@ static void on_disconnect(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
  */
 static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 {
-		char *a = "ULCK";
+//		char *a = "ULCK";
 		char *b = "LCKD";
 	  char *c = "ERRO";
 
@@ -59,22 +59,21 @@ static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 					p_sml->evt_handler(p_sml,&ble_sml_c_evt);
 					
 					p_sml->lock_status = LOCK_OPEN;
-					if(nrf_gpio_pin_read(25) == 0)
-					{
+//					if(nrf_gpio_pin_read(25) == 0)
+//					{
 //						p_sml->lock_status = LOCK_OPEN;
-						ble_sml_custom_value_update(p_sml, a);	
-					}
-					else
-					{
-						ble_sml_custom_value_update(p_sml, c);	
-					}
+//						ble_sml_custom_value_update(p_sml, a);	
+//					}
+//					else
+//					{
+//						ble_sml_custom_value_update(p_sml, c);	
+//					}
 			}
 			else if (*p_evt_write->data == 0x12)
 			{					
 					p_sml->lock_status = LOCK_CLOSE;
 					if(nrf_gpio_pin_read(25) == 1)
 					{
-						
 						ble_sml_custom_value_update(p_sml, b);	
 					}
 					else
@@ -197,6 +196,9 @@ static uint32_t custom_value_char_add(ble_sml_t * p_sml, const ble_sml_init_t * 
     attr_char_value.init_offs = 0;
     attr_char_value.max_len   = sizeof(uint8_t);
 
+		BLE_GAP_CONN_SEC_MODE_SET_LESC_ENC_WITH_MITM(&attr_md.read_perm);
+		BLE_GAP_CONN_SEC_MODE_SET_LESC_ENC_WITH_MITM(&attr_md.write_perm);
+
     err_code = sd_ble_gatts_characteristic_add(p_sml->service_handle, &char_md,
                                                &attr_char_value,
                                                &p_sml->lock_control_handle);
@@ -245,9 +247,11 @@ static uint32_t custom_value_char_add(ble_sml_t * p_sml, const ble_sml_init_t * 
 		memset(&cccd_md_2, 0, sizeof(cccd_md_2));
 
     //  Read  operation on Cccd should be possible without authentication.
+//    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md_2.read_perm);
+//    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md_2.write_perm);
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md_2.read_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md_2.write_perm);
-    
+    BLE_GAP_CONN_SEC_MODE_SET_LESC_ENC_WITH_MITM(&cccd_md_2.write_perm);
+
     cccd_md_2.vloc       = BLE_GATTS_VLOC_STACK;
 		
     err_code = sd_ble_gatts_characteristic_add(p_sml->service_handle, &char_md_2,
@@ -306,7 +310,7 @@ uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, char * custom_value)
     // Initialize value struct.
     memset(&gatts_value, 0, sizeof(gatts_value));
 
-    gatts_value.len     = sizeof(uint8_t);
+    gatts_value.len     = sizeof(uint32_t);
     gatts_value.offset  = 0;
     gatts_value.p_value = (uint8_t *)custom_value;
 

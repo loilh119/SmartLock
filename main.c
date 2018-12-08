@@ -36,6 +36,7 @@
 #include "app_uart.h"
 #include "nrf_uart.h"
 #include "R301.h"
+#include "nrf_drv_clock.h"
 
 #define LESC_DEBUG_MODE                 0                                               /**< Set to 1 to use the LESC debug keys. The debug mode allows you to use a sniffer to inspect traffic. */
 #define LESC_MITM_NC                    1                                               /**< Use MITM (Numeric Comparison). */
@@ -71,9 +72,9 @@
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                           /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                          /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                               /**< Number of attempts before giving up the connection parameter negotiation. */
-#define UART_TIMER					            APP_TIMER_TICKS(800)
-#define LOCK_TIMER					            APP_TIMER_TICKS(3000)
-
+#define UART_TIMER					            APP_TIMER_TICKS(200)
+#define LOCK_TIMER					            APP_TIMER_TICKS(4000)
+#define DELAY_TIMER					            APP_TIMER_TICKS(1000)
 #define UART_TX_BUF_SIZE 256                         /**< UART TX buffer size. */
 #define UART_RX_BUF_SIZE 256                         /**< UART RX buffer size. */
 /**@brief   Priority of the application BLE event handler.
@@ -93,6 +94,10 @@ static int status_confirm_finger = 0;
 static volatile bool scan_int_act = true;
 static volatile bool scan_finger_act = true;
 static volatile bool delete_finger_act = true;
+static volatile bool phone_lock = false;
+
+static int check = 0;
+static int enable_int = 1;
 
 NRF_BLE_GATT_DEF(m_gatt);                                                   /**< GATT module instance. */
 NRF_BLE_QWRS_DEF(m_qwr, NRF_SDH_BLE_TOTAL_LINK_COUNT);                      /**< Context for the Queued Write module.*/
@@ -105,8 +110,7 @@ APP_TIMER_DEF(scan_finger);
 APP_TIMER_DEF(scan_int);
 APP_TIMER_DEF(delete_finger);
 APP_TIMER_DEF(lock);
-
-
+APP_TIMER_DEF(delay_timer);
 static uint16_t           m_conn_handle_hrs_c                = BLE_CONN_HANDLE_INVALID;  /**< Connection handle for the HRS central application. */
 static volatile uint16_t  m_conn_handle_num_comp_central     = BLE_CONN_HANDLE_INVALID;  /**< Connection handle for the central that needs a numeric comparison button press. */
 static volatile uint16_t  m_conn_handle_num_comp_peripheral  = BLE_CONN_HANDLE_INVALID;  /**< Connection handle for the peripheral that needs a numeric comparison button press. */
@@ -194,7 +198,7 @@ void init_uart()
                        UART_RX_BUF_SIZE,
                        UART_TX_BUF_SIZE,
                        uart_handle,
-                       APP_IRQ_PRIORITY_LOWEST,
+                       APP_IRQ_PRIORITY_HIGH,
                        err_code);
     APP_ERROR_CHECK(err_code);
 }
@@ -481,10 +485,10 @@ static void on_ble_evt(uint16_t conn_handle, ble_evt_t const * p_ble_evt)
                          nrf_log_push((char*)passkey),
                          p_ble_evt->evt.gap_evt.params.passkey_display.match_request);
 												 
-						ssd1306_clear_screen(0x00);
-						ssd1306_display_string(32, 14, "PASS KEY", 16, 1);						 
-						ssd1306_display_string(37, 31, (char*)passkey, 16, 1);
-						ssd1306_refresh_gram();
+//						ssd1306_clear_screen(0x00);
+//						ssd1306_display_string(32, 14, "PASS KEY", 16, 1);						 
+//						ssd1306_display_string(37, 31, (char*)passkey, 16, 1);
+//						ssd1306_refresh_gram();
 												 
             if (p_ble_evt->evt.gap_evt.params.passkey_display.match_request)
             {
@@ -856,14 +860,29 @@ static void on_num_comp_button_press(bool accept)
     {
         num_comp_reply(m_conn_handle_num_comp_central, accept);
         m_conn_handle_num_comp_central = BLE_CONN_HANDLE_INVALID;
+				
+//				if(accept == true)
+//				{
+//						ssd1306_clear_screen(0x00);
+//						ssd1306_display_string(32, 20, "ACCEPT", 16, 1);						 
+//						ssd1306_refresh_gram();
+//						ssd1306_clear_screen(0x00);
+//				}
+//				else if(accept == false)
+//				{
+//						ssd1306_clear_screen(0x00);
+//						ssd1306_display_string(32, 20, "REJECT", 16, 1);						 
+//						ssd1306_refresh_gram();
+//						ssd1306_clear_screen(0x00);
+//				}
     }
     else if (m_conn_handle_num_comp_peripheral != BLE_CONN_HANDLE_INVALID)
     {
-			NRF_LOG_INFO("debug 1");
+//			NRF_LOG_INFO("debug 1");
         num_comp_reply(m_conn_handle_num_comp_peripheral, accept);
-			NRF_LOG_INFO("debug 2");
+//			NRF_LOG_INFO("debug 2");
         m_conn_handle_num_comp_peripheral = BLE_CONN_HANDLE_INVALID;
-			NRF_LOG_INFO("debug 3");
+//			NRF_LOG_INFO("debug 3");
     }
 }
 
@@ -878,26 +897,11 @@ static void bsp_event_handler(bsp_event_t event)
     switch (event)
     {
         case BSP_EVENT_KEY_0:
-
-//					NRF_LOG_INFO("debug button 1st");
-
-//					NRF_LOG_INFO("debug button 3rd");
-					ssd1306_clear_screen(0x00);
-					ssd1306_display_string(32, 20, "ACCEPT", 16, 1);						 
-					ssd1306_refresh_gram();
-					ssd1306_clear_screen(0x00);
-				
           on_num_comp_button_press(true);
           break;
 
       case BSP_EVENT_KEY_1:
-						
-					ssd1306_clear_screen(0x00);
-					ssd1306_display_string(32, 20, "REJECT", 16, 1);						 
-					ssd1306_refresh_gram();
-					ssd1306_clear_screen(0x00);
-          on_num_comp_button_press(false);
-//						NRF_LOG_INFO("debug button 5th");
+					on_num_comp_button_press(false);
             break;
 
         default:
@@ -915,15 +919,12 @@ static void buttons_leds_init(bool * p_erase_bonds)
 {
     ret_code_t err_code;
     bsp_event_t startup_event;
-		
 	
-		nrf_gpio_cfg_output(LED_3);
-		nrf_gpio_cfg_output(LED_2);
-		nrf_gpio_cfg_output(LED_4);
+//		nrf_gpio_cfg_output(LED_3);
+//		nrf_gpio_cfg_output(LED_2);
+//		nrf_gpio_cfg_output(LED_4);
 	
-		nrf_gpio_cfg_input(29, NRF_GPIO_PIN_PULLDOWN);
 		nrf_gpio_cfg_input(25, NRF_GPIO_PIN_PULLDOWN);
-		nrf_gpio_cfg_input(4, NRF_GPIO_PIN_PULLDOWN);
 	
 		nrf_gpio_cfg_output(28);
 		nrf_gpio_pin_clear(28);
@@ -1048,7 +1049,7 @@ static void db_discovery_init(void)
 
 /**@brief Function for initializing the advertising functionality. */
 static void advertising_init(void)
-{
+{		
     ret_code_t             err_code;
     ble_advertising_init_t init;
 
@@ -1066,7 +1067,7 @@ static void advertising_init(void)
     init.config.ble_adv_fast_enabled  = true;
     init.config.ble_adv_fast_interval = ADV_INTERVAL;
     init.config.ble_adv_fast_timeout  = APP_ADV_DURATION;
-
+		
     init.evt_handler = on_adv_evt;
 
     err_code = ble_advertising_init(&m_advertising, &init);
@@ -1085,122 +1086,93 @@ static void log_init(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
-/**@brief Function for handling the Battery measurement timer timeout.
- *
- * @details This function will be called each time the battery level measurement timer expires.
- *
- * @param[in] p_context  Pointer used for passing some arbitrary information (context) from the
- *                       app_start_timer() call to the timeout handler.
- */
+
+
 static void scan_finger_handler(void * p_context)
 {
 		ret_code_t err_code;
     UNUSED_PARAMETER(p_context);		
-    // Increment the value of m_custom_value before nortifing it.
 		
 		if(scan_finger_act == true)
 		{
-			switch(status_scan_finger)
+			if(check == 0)
 			{
-				case 0:	
-					delay(200);
-					if(check_sum(4,12) == 0x00)
-					{
-						nrf_gpio_pin_clear(LED_3);
-						reset_buffer();
-						status_scan_finger = 1;
+				switch(status_scan_finger)
+				{
+					case 0:	
+						Collect_Finger();
+						check = 1;
 						break;
-					}
-					else
-					{
-						reset_buffer();
-					}
-					Collect_Finger();
-					break;
-				case 1:				
-					delay(200);
-					if(check_sum(4,12) == 0x00)
-					{
-						nrf_gpio_pin_set(LED_3);
-						reset_buffer();
-						status_scan_finger = 2;
-						break;
-					}
-					else
-					{
-						reset_buffer();
-					}
-					Generate_Character(1);
-					break;
 					
-				case 2:	
-					delay(200);
-					if(check_sum(4,12) == 0x00)
-					{
-						nrf_gpio_pin_clear(LED_3);
-						reset_buffer();
-						status_scan_finger = 3;
+					case 1:
+						Generate_Character(1);
+						check = 1;
 						break;
-					}
-					else
-					{
-						reset_buffer();
-					}
-					Collect_Finger();
-					break;
-				case 3:		
-					delay(200);				
-					if(check_sum(4,12) == 0x00)
-					{
-						nrf_gpio_pin_set(LED_3);
-						reset_buffer();
-						status_scan_finger = 4;
+					
+					case 2:
+						Collect_Finger();
+						check = 1;
 						break;
-					}
-					else
-					{
-						reset_buffer();
-					}
-					Generate_Character(2);
-					break;
-				case 4:		
-				delay(200);				
-					if(check_sum(4,12) == 0x00)
-					{
-						nrf_gpio_pin_clear(LED_3);
-						reset_buffer();
-						status_scan_finger = 5;
+					
+					case 3:
+						Generate_Character(2);
+						check = 1;
 						break;
-					}
-					else
-					{
-						reset_buffer();
-					}
-					Generate_Template();
-					break;
-				case 5:		
-					delay(200);
-					if(check_sum(4,12) == 0x00)
-					{
-						nrf_gpio_pin_set(LED_3);
-						reset_buffer();
+					
+					case 4:
+						Generate_Template();
+						check = 1;
+						break;
+					
+					case 5:
+						Store_Template(1, 1);
+						check = 2;
+						break;
+					
+					default:
+						break;
+				}
+			}
+			else if(check == 1)
+			{
+				switch(check_sum(4,12))
+				{
+					case 0x00:
+						check = 0;
+						status_scan_finger ++;
+						break;
+					
+					case -1:
+						break;
+					
+					default:
+						check = 0;
+						break;
+				}
+			}
+			else if(check == 2)
+			{
+				switch(check_sum(4,12))
+				{
+					case 0x00:
+						check = 0;
 						
 						status_scan_finger = 0;
-						
+					
 						scan_int_act = true;
 						delete_finger_act = true;
-						
+										
 						err_code = app_timer_stop(scan_finger);
 						APP_ERROR_CHECK(err_code);
 						break;
-					}
-					else
-					{
-						reset_buffer();
-					}
-					Store_Template(1, 1);
-				default:
-					break;
+					
+					case -1:
+						break;
+					
+					default:
+						check = 0;
+						break;
+				}
 			}
 		}
 }
@@ -1209,135 +1181,184 @@ static void delete_finger_handler(void * p_context)
 {
 		ret_code_t err_code;
     UNUSED_PARAMETER(p_context);
-		int temp = 0;	
-		delay(200);
+		
 		if(delete_finger_act == true)
 		{
-			if(check_sum(4,12) == 0x00)
-			{
-				nrf_gpio_pin_clear(LED_3);
-				reset_buffer();
-				
-				scan_int_act = true;
-				scan_finger_act = true;
-
-				err_code = app_timer_stop(delete_finger);
-				APP_ERROR_CHECK(err_code);
-				temp = 1;
-			}
-			else
-			{
-				reset_buffer();
-			}
-			if(temp == 0)
+			if(check == 0)
 			{
 				Library_Empty();
+				check = 1;
+			}
+			else if(check == 1)
+			{
+				switch(check_sum(4,12))
+				{
+					case 0x00:
+						
+						scan_int_act = true;
+						scan_finger_act = true;
+					
+						check = 0;
+					
+						err_code = app_timer_stop(delete_finger);
+						APP_ERROR_CHECK(err_code);
+						break;
+					
+					case -1:
+						break;
+					
+					default:
+						check = 0;
+						break;
+				}
 			}
 		}
+}
+
+static void delay_handler(void * p_context)
+{
+		ret_code_t err_code;
+		
+    UNUSED_PARAMETER(p_context);
+	
+		enable_int = 1;
+		
+		err_code = app_timer_stop(delay_timer);
+		APP_ERROR_CHECK(err_code);	
 }
 
 static void lock_handler(void * p_context)
 {
 		ret_code_t err_code;
-    UNUSED_PARAMETER(p_context);
-		nrf_gpio_pin_clear(28);
-	
-		err_code = app_timer_stop(lock);
-		APP_ERROR_CHECK(err_code);
-	
+    UNUSED_PARAMETER(p_context);	
+		if(phone_lock == true)
+		{
+			char *a = "ULCK";
+			char *c = "ERRO";
+			if(nrf_gpio_pin_read(25) == 0)
+			{
+					ble_sml_custom_value_update(&m_sml, a);	
+			}
+			else
+			{
+					ble_sml_custom_value_update(&m_sml, c);	
+			}
+		}
 		
+		nrf_gpio_pin_clear(28);
+		
+		err_code = app_timer_stop(lock);
+		APP_ERROR_CHECK(err_code);	
+		
+		err_code = app_timer_start(delay_timer, DELAY_TIMER, NULL);
+		APP_ERROR_CHECK(err_code);
 }
 
 static void scan_int_handler(void * p_context)
 {
 		ret_code_t err_code;  
 		UNUSED_PARAMETER(p_context);	
+	
 		if(scan_int_act == true)
 		{
-			switch(status_confirm_finger)
+			if(check == 0)
 			{
-				case 0:	
-					delay(200);
-					if(check_sum(4,12) == 0x00)
-					{
-//						nrf_gpio_pin_clear(LED_3);
-						reset_buffer();
-						status_confirm_finger = 1;
-						break;
-					}
-					else
-					{
-						reset_buffer();
+				switch(status_confirm_finger)
+				{
+					case 0:	
 						Collect_Finger();
+						check = 1;
 						break;
-					}
-				case 1:		
-					delay(200);		
-					if(check_sum(4,12) == 0x00)
-					{
-//						nrf_gpio_pin_set(LED_3);
-						reset_buffer();
-						status_confirm_finger = 2;
-						break;
-					}
-					else
-					{
-						reset_buffer();
+					case 1:
 						Generate_Character(1);
+						check = 1;
 						break;
-					}
-				case 2:
-					delay(200);
-					if(check_sum(8,16) == 0x00)
-					{
-//						nrf_gpio_pin_clear(LED_3);
+					case 2:
+						Search_Finger(1, 15);
+						check = 2;
+						break;		
+					default:
+						break;
+				}
+			}
+			else if(check == 1)
+			{
+				switch(check_sum(4,12))
+				{
+					case 0x00:
+						check = 0;
+						status_confirm_finger ++;
+						break;
+					
+					case -1:
+						break;
+					
+					default:
+						check = 0;
+						break;
+				}
+			}
+			else if(check == 2)
+			{
+				switch(check_sum(8,16))
+				{
+					case 0x00:
+						check = 0;
 						
-						reset_buffer();
-						status_confirm_finger = 5;
-
+						status_confirm_finger = 0;
+					
+						scan_int_act = true;
 						scan_finger_act = true;
 						delete_finger_act = true;
+						
 						nrf_gpio_pin_set(28);
 						m_sml.lock_status = LOCK_OPEN;
+					
+						phone_lock = false;
+					
 						err_code = app_timer_stop(scan_int);
 						APP_ERROR_CHECK(err_code);
-						
-//						err_code = app_timer_stop_all();
-//						APP_ERROR_CHECK(err_code);
+
 						err_code = app_timer_start(lock, LOCK_TIMER, NULL);
 						APP_ERROR_CHECK(err_code);
-						break;
-					}
-					else if(check_sum(8,16) == 0x09)
-					{
-//						nrf_gpio_pin_set(LED_3);
-//						nrf_gpio_pin_clear(LED_4);
-						reset_buffer();
-						status_confirm_finger = 0;
 						
+						break;
+					
+					case 0x09:
+						check = 0;
+						
+						status_confirm_finger = 0;
+					
+						scan_int_act = true;
 						scan_finger_act = true;
-						delete_finger_act = true;					
+						delete_finger_act = true;
+						
+						enable_int = 1;
+					
+						m_sml.lock_status = LOCK_CLOSE;
+					
 						err_code = app_timer_stop(scan_int);
 						APP_ERROR_CHECK(err_code);
 						break;
-					}
-					else
-					{
-//						nrf_gpio_pin_set(LED_4);
-						reset_buffer();
-						Search_Finger(1, 15);
+					
+					case -1:
 						break;
-					}
-				case 5:
-					status_confirm_finger = 0;
-					err_code = app_timer_stop(scan_int);
-					APP_ERROR_CHECK(err_code);
-					break;
-				default:
-					break;
+					
+					default:
+						check = 0;
+						break;
+				}
 			}
 		}
 }
+
+static void lfclk_request(void)
+{
+    uint32_t err_code = nrf_drv_clock_init();
+    APP_ERROR_CHECK(err_code);
+    nrf_drv_clock_lfclk_request(NULL);
+}
+
 /**@brief Function for initializing the timer. */
 static void timer_init(void)
 {
@@ -1354,6 +1375,9 @@ static void timer_init(void)
     APP_ERROR_CHECK(err_code);
 	
 		err_code = app_timer_create(&lock, APP_TIMER_MODE_REPEATED, lock_handler);
+    APP_ERROR_CHECK(err_code);
+		
+		err_code = app_timer_create(&delay_timer, APP_TIMER_MODE_REPEATED, delay_handler);
     APP_ERROR_CHECK(err_code);
 	
 }
@@ -1393,35 +1417,44 @@ static void on_sml_evt(ble_sml_t     * p_sml_service,
     switch(p_evt->evt_type)
     {
         case BLE_SML_EVT_CONNECTED:
-						ssd1306_clear_screen(0x00);
-						ssd1306_display_string(25, 20, "CONNECTING", 16, 1);						 
-						ssd1306_refresh_gram();
-						ssd1306_clear_screen(0x00);
+//						ssd1306_clear_screen(0x00);
+//						ssd1306_display_string(25, 20, "CONNECTING", 16, 1);						 
+//						ssd1306_refresh_gram();
+//						ssd1306_clear_screen(0x00);
             break;
 
         case BLE_SML_EVT_DISCONNECTED:
-							ssd1306_clear_screen(0x00);
-							ssd1306_display_string(25, 20, "DISCONNECT", 16, 1);	
-							ssd1306_refresh_gram();
-							ssd1306_clear_screen(0x00);
-              break;
+//						ssd1306_clear_screen(0x00);
+//						ssd1306_display_string(25, 20, "DISCONNECT", 16, 1);	
+//						ssd1306_refresh_gram();
+//						ssd1306_clear_screen(0x00);
+            break;
 				
 				case BLE_SML_EVT_NOTIFICATION_ENABLED:
             break;
 
         case BLE_SML_EVT_NOTIFICATION_DISABLED:
             break;
+				
 				case BLE_SML_EVT_LOCK_OPEN:
-					nrf_gpio_pin_set(28);
 					
+					phone_lock = true;
+				
+					nrf_gpio_pin_set(28);					
+
 					err_code = app_timer_start(lock, LOCK_TIMER, NULL);
 					APP_ERROR_CHECK(err_code);
-						break;
+
+					break;
 				
 				case BLE_SML_EVT_FINGER:
 					
 					scan_int_act = false;
 					delete_finger_act = false;
+				
+					check = 0;
+				
+					status_scan_finger = 0;
 				
 					err_code = app_timer_start(scan_finger, UART_TIMER, NULL);
 					APP_ERROR_CHECK(err_code);
@@ -1430,17 +1463,22 @@ static void on_sml_evt(ble_sml_t     * p_sml_service,
 					
 					scan_int_act = false;
 					scan_finger_act = false;
+					
+					check = 0;
 				
 					err_code = app_timer_start(delete_finger, UART_TIMER, NULL);
 					APP_ERROR_CHECK(err_code);
 					break;
 				
 				case BLE_SML_EVT_CANCEL:
+					
 					scan_int_act = true;
 					scan_finger_act = true;
 					delete_finger_act = true;
+				
 					err_code = app_timer_stop_all();
 					APP_ERROR_CHECK(err_code);
+					break;
         default:
               // No implementation needed.
               break;
@@ -1459,9 +1497,12 @@ static void services_init(void)
 		
 		sml_init.evt_handler                = on_sml_evt;
 	
-		BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sml_init.custom_value_char_attr_md.read_perm);
-		BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sml_init.custom_value_char_attr_md.write_perm);
+//		BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sml_init.custom_value_char_attr_md.read_perm);
+//		BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sml_init.custom_value_char_attr_md.write_perm);
 		
+		BLE_GAP_CONN_SEC_MODE_SET_ENC_WITH_MITM(&sml_init.custom_value_char_attr_md.read_perm);
+		BLE_GAP_CONN_SEC_MODE_SET_ENC_WITH_MITM(&sml_init.custom_value_char_attr_md.write_perm);
+	
     err_code = ble_sml_init(&m_sml, &sml_init);
     APP_ERROR_CHECK(err_code);	
 }
@@ -1470,17 +1511,27 @@ void finger_scan(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
 	ret_code_t err_code;
 	nrf_gpio_pin_toggle(LED_2);
+
 	if(nrf_gpio_pin_read(4) == 0)
 	{
 		if(scan_int_act == true)
 		{
-			nrf_gpio_pin_toggle(LED_4);
-			
-			scan_finger_act = false;
-			delete_finger_act = false;
-			
-			err_code = app_timer_start(scan_int, UART_TIMER, NULL);
-			APP_ERROR_CHECK(err_code);
+			if(enable_int == 1)
+			{
+				nrf_gpio_pin_toggle(LED_4);
+				
+				status_confirm_finger = 0;
+				
+				enable_int = 0;
+				
+				check = 0;
+				
+				scan_finger_act = false;
+				delete_finger_act = false;
+				
+				err_code = app_timer_start(scan_int, APP_TIMER_TICKS(300), NULL);
+				APP_ERROR_CHECK(err_code);
+			}
 		}
 	}
 }
@@ -1532,15 +1583,17 @@ int main(void)
 {
     bool erase_bonds;
     // Initialize.
-		twi_init();
-		ssd1306_init(); 
-		ssd1306_clear_screen(0x00);
-		ssd1306_display_string(25, 20, "SMART LOCK", 16, 1);
-		ssd1306_refresh_gram();
+//		twi_init();
+//		ssd1306_init(); 
+//		ssd1306_clear_screen(0x00);
+//		ssd1306_display_string(25, 20, "SMART LOCK", 16, 1);
+//		ssd1306_refresh_gram();
+	
+		lfclk_request();
+    timer_init();
 	
 		init_uart();
     log_init();
-    timer_init();
 		gpio_init();	
 		
     buttons_leds_init(&erase_bonds);

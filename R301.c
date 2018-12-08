@@ -101,7 +101,7 @@ void reset_buffer()
  *---------------------------------------------------------------------------*/
 void delay(int time)
 {
-		nrf_delay_ms(time);
+		nrf_delay_us(time);
 }
 
 /*----------------------------------------------------------------------------
@@ -112,8 +112,9 @@ void delay(int time)
  *	return:	none
  *---------------------------------------------------------------------------*/
 void Collect_Finger()
-{
-		uart_send(CollectFinger,12);
+{			
+			reset_buffer();
+			uart_send(CollectFinger,12);
 }
 
 /*----------------------------------------------------------------------------
@@ -125,6 +126,7 @@ void Collect_Finger()
  *---------------------------------------------------------------------------*/
 void Generate_Character(uint8_t CharID)
 {
+		reset_buffer();
 		if(CharID == 1)
 		{
 			uart_send(GenerateChar1,13);
@@ -144,6 +146,7 @@ void Generate_Character(uint8_t CharID)
  *---------------------------------------------------------------------------*/
 void Match_Character()
 {
+		reset_buffer();
 		uart_send(MatchChar,12);
 }
 
@@ -156,6 +159,7 @@ void Match_Character()
  *---------------------------------------------------------------------------*/
 void Generate_Template()
 {
+		reset_buffer();
 		uart_send(GenerateTemp,12);
 }
 
@@ -168,6 +172,7 @@ void Generate_Template()
  *---------------------------------------------------------------------------*/
 void Store_Template(uint8_t CharID, uint8_t Page_ID)
 {
+		reset_buffer();
 		StoreTemp1[12] = Page_ID;
 		if(CharID == 1)
 		{
@@ -192,6 +197,7 @@ void Search_Finger(uint8_t CharID, uint8_t Page_Num)
 		SearchLibrary2[14] = Page_Num;
 		SearchLibrary1[16] = 0x0E + Page_Num ;
 		SearchLibrary2[16] = 0x0F + Page_Num ;
+		reset_buffer();
 		if(CharID == 1)
 		{
 			uart_send(SearchLibrary1,17);
@@ -211,6 +217,7 @@ void Search_Finger(uint8_t CharID, uint8_t Page_Num)
  *---------------------------------------------------------------------------*/
 void Library_Empty()
 {
+		reset_buffer();
 		uart_send(LibEmpty,12);
 }
 

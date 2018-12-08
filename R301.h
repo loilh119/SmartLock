@@ -72,6 +72,14 @@ static uint8_t LibEmpty[12]      = {0xEF,0x01,0xFF,0xFF,0xFF,0xFF,COMMAND,0x00,0
 /********** Type definition section *******************************************/
 /********** Macro definition section*******************************************/
 /********** Function declaration section **************************************/
+
+void timer_finger_init(void);
+void start_finger_timer(void);
+
+int test_timer(void);
+
+
+
 uint8_t handler_uart(void);
 void reset_buffer(void);
 void delay(int time);
