@@ -59,14 +59,14 @@ uint8_t handler_uart()
 int check_sum(int byte_num, int byte)
 {
 		uint8_t temp = 0;
-		uint16_t check = (buffer_uart_receive.uart_buffer[byte-2] << 2) + buffer_uart_receive.uart_buffer[byte-1];
+		uint16_t checksum = (buffer_uart_receive.uart_buffer[byte-2] << 8) + buffer_uart_receive.uart_buffer[byte-1];
 
 		for(int i = 0; i < byte_num; i ++)
 		{
 			temp += buffer_uart_receive.uart_buffer[i+6];
 		}
 		
-		if(temp == check && check != 0x00)
+		if(temp == checksum && checksum != 0x00)
 		{
 			return buffer_uart_receive.uart_buffer[9];
 		}
@@ -138,16 +138,29 @@ void Generate_Character(uint8_t CharID)
 }
 
 /*----------------------------------------------------------------------------
- *  Match_Character()
- *	Descriptions:	Check 2 Character Match 
+ *  Valid_Template_Number()
+ *	Descriptions:	Get Valid Template Number 
  *	input:	none
  * 	output:	none
  *	return:	none
  *---------------------------------------------------------------------------*/
-void Match_Character()
+uint16_t Get_Temp_Num()
+{
+		uint16_t TempNum = 0;
+		TempNum = (buffer_uart_receive.uart_buffer[10] << 8) + buffer_uart_receive.uart_buffer[11];
+		return TempNum;
+}
+/*----------------------------------------------------------------------------
+ *  Valid_Template_Number()
+ *	Descriptions:	Get Valid Template Number 
+ *	input:	none
+ * 	output:	none
+ *	return:	none
+ *---------------------------------------------------------------------------*/
+void Valid_Template_Number()
 {
 		reset_buffer();
-		uart_send(MatchChar,12);
+		uart_send(ValidTempNum,12);
 }
 
 /*----------------------------------------------------------------------------
@@ -170,16 +183,25 @@ void Generate_Template()
  * 	output:	none
  *	return:	none
  *---------------------------------------------------------------------------*/
-void Store_Template(uint8_t CharID, uint8_t Page_ID)
+void Store_Template(uint8_t CharID, uint16_t Page_ID)
 {
 		reset_buffer();
-		StoreTemp1[12] = Page_ID;
+		uint16_t checksum1 = 0x0E + Page_ID;
+		uint16_t checksum2 = 0x0F + Page_ID;
 		if(CharID == 1)
 		{
+			StoreTemp1[12] = Page_ID;
+			StoreTemp1[11] = Page_ID >> 8;
+			StoreTemp1[14] = checksum1;
+			StoreTemp1[13] = checksum1 >> 8;
 			uart_send(StoreTemp1,15);
 		}
 		else if(CharID == 2)
 		{
+			StoreTemp2[12] = Page_ID;
+			StoreTemp2[11] = Page_ID >> 8;
+			StoreTemp2[14] = checksum2;
+			StoreTemp2[13] = checksum2 >> 8;
 			uart_send(StoreTemp2,15);
 		}
 }
@@ -191,19 +213,25 @@ void Store_Template(uint8_t CharID, uint8_t Page_ID)
  * 	output:	none
  *	return:	none
  *---------------------------------------------------------------------------*/
-void Search_Finger(uint8_t CharID, uint8_t Page_Num)
+void Search_Finger(uint8_t CharID, uint16_t Page_Num)
 {
-		SearchLibrary1[14] = Page_Num;
-		SearchLibrary2[14] = Page_Num;
-		SearchLibrary1[16] = 0x0E + Page_Num ;
-		SearchLibrary2[16] = 0x0F + Page_Num ;
 		reset_buffer();
+		uint16_t checksum1 = 0x0E + Page_Num;
+		uint16_t checksum2 = 0x0F + Page_Num;
 		if(CharID == 1)
 		{
+			SearchLibrary1[14] = Page_Num;
+			SearchLibrary1[13] = Page_Num >> 8;
+			SearchLibrary1[16] = checksum1;
+			SearchLibrary1[15] = checksum1 >> 8;
 			uart_send(SearchLibrary1,17);
 		}
 		else if(CharID == 2)	
 		{
+			SearchLibrary2[14] = Page_Num;
+			SearchLibrary2[13] = Page_Num >> 8;
+			SearchLibrary2[16] = checksum2;
+			SearchLibrary2[15] = checksum2 >> 8;
 			uart_send(SearchLibrary2,17);
 		}
 }

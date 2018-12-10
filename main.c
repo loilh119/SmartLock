@@ -95,7 +95,7 @@ static volatile bool scan_int_act = true;
 static volatile bool scan_finger_act = true;
 static volatile bool delete_finger_act = true;
 static volatile bool phone_lock = false;
-
+static volatile uint16_t Template_Count = 0;
 static int check = 0;
 static int enable_int = 1;
 
@@ -1123,10 +1123,13 @@ static void scan_finger_handler(void * p_context)
 						Generate_Template();
 						check = 1;
 						break;
-					
 					case 5:
-						Store_Template(1, 1);
+						Valid_Template_Number();
 						check = 2;
+						break;
+					case 6:
+						Store_Template(1, Template_Count);
+						check = 3;
 						break;
 					
 					default:
@@ -1151,6 +1154,24 @@ static void scan_finger_handler(void * p_context)
 				}
 			}
 			else if(check == 2)
+			{
+				switch(check_sum(6,14))
+				{
+					case 0x00:
+						check = 0;
+						Template_Count = Get_Temp_Num();
+						status_scan_finger ++;
+						break;
+					
+					case -1:
+						break;
+
+					default:
+						check = 0;
+						break;
+				}
+			}
+			else if(check == 3)
 			{
 				switch(check_sum(4,12))
 				{
@@ -1184,6 +1205,7 @@ static void delete_finger_handler(void * p_context)
 		
 		if(delete_finger_act == true)
 		{
+			Template_Count = 0;
 			if(check == 0)
 			{
 				Library_Empty();
