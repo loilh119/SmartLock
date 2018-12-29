@@ -150,6 +150,7 @@ uint16_t Get_Temp_Num()
 		TempNum = (buffer_uart_receive.uart_buffer[10] << 8) + buffer_uart_receive.uart_buffer[11];
 		return TempNum;
 }
+
 /*----------------------------------------------------------------------------
  *  Valid_Template_Number()
  *	Descriptions:	Get Valid Template Number 
@@ -213,13 +214,15 @@ void Store_Template(uint8_t CharID, uint16_t Page_ID)
  * 	output:	none
  *	return:	none
  *---------------------------------------------------------------------------*/
-void Search_Finger(uint8_t CharID, uint16_t Page_Num)
+void Search_Finger(uint8_t CharID, uint16_t Start_Page, uint16_t Page_Num)
 {
 		reset_buffer();
-		uint16_t checksum1 = 0x0E + Page_Num;
-		uint16_t checksum2 = 0x0F + Page_Num;
+		uint16_t checksum1 = 0x0E + Page_Num + Start_Page;
+		uint16_t checksum2 = 0x0F + Page_Num + Start_Page;
 		if(CharID == 1)
 		{
+			SearchLibrary1[12] = Start_Page;
+			SearchLibrary1[11] = Start_Page >> 8;
 			SearchLibrary1[14] = Page_Num;
 			SearchLibrary1[13] = Page_Num >> 8;
 			SearchLibrary1[16] = checksum1;
@@ -228,6 +231,8 @@ void Search_Finger(uint8_t CharID, uint16_t Page_Num)
 		}
 		else if(CharID == 2)	
 		{
+			SearchLibrary2[12] = Start_Page;
+			SearchLibrary2[11] = Start_Page >> 8;
 			SearchLibrary2[14] = Page_Num;
 			SearchLibrary2[13] = Page_Num >> 8;
 			SearchLibrary2[16] = checksum2;
@@ -249,4 +254,20 @@ void Library_Empty()
 		uart_send(LibEmpty,12);
 }
 
-
+/*----------------------------------------------------------------------------
+ *  Delete_Template()
+ *	Descriptions:	Delete finger in library
+ *	input:	none
+ * 	output:	none
+ *	return:	none
+ *---------------------------------------------------------------------------*/
+void Delete_Template(uint16_t Page_ID)
+{
+		reset_buffer();
+		uint16_t checksum = 0x15 + Page_ID;
+		DeletTemplate[11] = Page_ID;
+		DeletTemplate[10] = Page_ID >> 8;
+		DeletTemplate[15] = checksum;
+		DeletTemplate[14] = checksum >> 8;
+		uart_send(DeletTemplate,16);
+}

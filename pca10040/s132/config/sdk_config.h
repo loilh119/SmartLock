@@ -342,14 +342,14 @@
  
 
 #ifndef BLE_HRS_C_ENABLED
-#define BLE_HRS_C_ENABLED 1
+#define BLE_HRS_C_ENABLED 0
 #endif
 
 // <q> BLE_HRS_ENABLED  - ble_hrs - Heart Rate Service
  
 
 #ifndef BLE_HRS_ENABLED
-#define BLE_HRS_ENABLED 1
+#define BLE_HRS_ENABLED 0
 #endif
 
 // </h> 

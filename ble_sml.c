@@ -7,13 +7,20 @@
 #include "nrf_log.h"
 #include "R301.h"
 #include "nrf_delay.h"
-static void on_connect(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
-{
-    p_sml->conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-	
-		ble_sml_evt_t evt;
+#include "app_uart.h"
+#include "nrf_uart.h"
+#include "ble_link_ctx_manager.h"
 
-    evt.evt_type = BLE_SML_EVT_CONNECTED;
+#define BLE_NUS_MAX_RX_CHAR_LEN        BLE_NUS_MAX_DATA_LEN /**< Maximum length of the RX Characteristic (in bytes). */
+#define BLE_NUS_MAX_TX_CHAR_LEN        BLE_NUS_MAX_DATA_LEN /**< Maximum length of the TX Characteristic (in bytes). */
+
+static void on_connect(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
+{				
+		p_sml->conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+		
+		ble_sml_evt_t evt;
+		
+		evt.evt_type = BLE_SML_EVT_CONNECTED;
 
     p_sml->evt_handler(p_sml, &evt);
 }
@@ -26,6 +33,7 @@ static void on_connect(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 static void on_disconnect(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 {
     UNUSED_PARAMETER(p_ble_evt);
+	
     p_sml->conn_handle = BLE_CONN_HANDLE_INVALID;
 	
 		ble_sml_evt_t evt;
@@ -42,90 +50,86 @@ static void on_disconnect(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
  */
 static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 {
-//		char *a = "ULCK";
-		char *b = "LCKD";
-	  char *c = "ERRO";
-
+    ble_sml_evt_t                 evt;
     ble_gatts_evt_write_t const * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
 
-    if ((p_evt_write->handle == p_sml->lock_control_handle.value_handle))
-		{
-			if(*p_evt_write->data == 0x11)
-			{				
-					ble_sml_evt_t ble_sml_c_evt;
+    memset(&evt, 0, sizeof(ble_sml_evt_t));
+    evt.p_sml       = p_sml;
+    evt.conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
 
-					ble_sml_c_evt.evt_type = BLE_SML_EVT_LOCK_OPEN;
-
-					p_sml->evt_handler(p_sml,&ble_sml_c_evt);
-					
-					p_sml->lock_status = LOCK_OPEN;
-//					if(nrf_gpio_pin_read(25) == 0)
-//					{
-//						p_sml->lock_status = LOCK_OPEN;
-//						ble_sml_custom_value_update(p_sml, a);	
-//					}
-//					else
-//					{
-//						ble_sml_custom_value_update(p_sml, c);	
-//					}
-			}
-			else if (*p_evt_write->data == 0x12)
-			{					
-					p_sml->lock_status = LOCK_CLOSE;
-					if(nrf_gpio_pin_read(25) == 1)
-					{
-						ble_sml_custom_value_update(p_sml, b);	
-					}
-					else
-					{
-						ble_sml_custom_value_update(p_sml, c);	
-					}
-			}
-			else if (*p_evt_write->data == 0x13)
-			{
-					ble_sml_evt_t ble_sml_c_evt;
-
-					ble_sml_c_evt.evt_type = BLE_SML_EVT_FINGER;
-
-					p_sml->evt_handler(p_sml,&ble_sml_c_evt);
-			}
-			else if(*p_evt_write->data == 0x14)
-			{
-					ble_sml_evt_t evt;
-
-					evt.evt_type = BLE_SML_EVT_DELETE_FINGER;
-
-					p_sml->evt_handler(p_sml,&evt);
-			}
-			else if(*p_evt_write->data == 0x15)
-			{
-					ble_sml_evt_t evt;
-
-					evt.evt_type = BLE_SML_EVT_CANCEL;
-
-					p_sml->evt_handler(p_sml,&evt);
-			}
-		}
-		
 		if ((p_evt_write->handle == p_sml->lock_status_handle.cccd_handle)
         && (p_evt_write->len == 2))
     {
         // CCCD written, call application event handler
         if (p_sml->evt_handler != NULL)
         {
-            ble_sml_evt_t evt;
-
             if (ble_srv_is_notification_enabled(p_evt_write->data))
             {
+								NRF_LOG_INFO("notification");
                 evt.evt_type = BLE_SML_EVT_NOTIFICATION_ENABLED;
             }
             else
             {
+								NRF_LOG_INFO("not notification");
                 evt.evt_type = BLE_SML_EVT_NOTIFICATION_DISABLED;
             }
             // Call the application event handler.
             p_sml->evt_handler(p_sml, &evt);
         }
+		}
+		
+		else if ((p_evt_write->handle == p_sml->lock_control_handle.value_handle) &&
+             (p_sml->evt_handler != NULL))
+    {
+			nrf_gpio_pin_toggle(LED_3);
+			NRF_LOG_INFO("LENGTH: %d",p_evt_write->len);
+			
+			if(p_evt_write->data[0] == 'u')
+			{
+					evt.evt_type               = BLE_SML_EVT_LOCK_OPEN;
+					evt.params.sml_data.p_data = p_evt_write->data;
+					evt.params.sml_data.length = p_evt_write->len;
+					p_sml->evt_handler(p_sml, &evt);
+			}				
+			else
+			{
+					evt.evt_type               = BLE_SML_EVT;
+					evt.params.sml_data.p_data = p_evt_write->data;
+					evt.params.sml_data.length = p_evt_write->len;
+					p_sml->evt_handler(p_sml, &evt);
+			}
+    }
+		else if ((p_evt_write->handle == p_sml->finger_print_handle.value_handle) &&
+             (p_sml->evt_handler != NULL))
+    {
+			nrf_gpio_pin_toggle(LED_3);
+			switch(p_evt_write->data[0])
+			{
+				case 'f':
+					evt.evt_type               = BLE_SML_EVT_FINGER;
+					evt.params.sml_data.p_data = p_evt_write->data;
+					evt.params.sml_data.length = p_evt_write->len;
+					p_sml->evt_handler(p_sml, &evt);
+					break;
+				case 'e':
+					evt.evt_type               = BLE_SML_EVT_DELETE_FINGER;
+					evt.params.sml_data.p_data = p_evt_write->data;
+					evt.params.sml_data.length = p_evt_write->len;
+					p_sml->evt_handler(p_sml, &evt);
+					break;
+				case 'c':
+					evt.evt_type               = BLE_SML_EVT_CANCEL;
+					evt.params.sml_data.p_data = p_evt_write->data;
+					evt.params.sml_data.length = p_evt_write->len;
+					p_sml->evt_handler(p_sml, &evt);
+					break;
+				default:
+					evt.evt_type               = BLE_SML_EVT;
+					evt.params.sml_data.p_data = p_evt_write->data;
+					evt.params.sml_data.length = p_evt_write->len;
+					p_sml->evt_handler(p_sml, &evt);
+					break;
+			}
 		}
 }
 
@@ -154,22 +158,19 @@ void ble_sml_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
     }
 }
 
-
 static uint32_t custom_value_char_add(ble_sml_t * p_sml, const ble_sml_init_t * p_sml_init)
 {
 		//lock control characteristic
     uint32_t            err_code;
     ble_gatts_char_md_t char_md;
-    
     ble_gatts_attr_t    attr_char_value;
     ble_uuid_t          ble_uuid;
     ble_gatts_attr_md_t attr_md;
-
+		ble_gatts_attr_md_t cccd_md;
+	
     memset(&char_md, 0, sizeof(char_md));
 
-    char_md.char_props.read   = 0;
     char_md.char_props.write  = 1;
-    char_md.char_props.notify = 0; 
     char_md.p_char_user_desc  = NULL;
     char_md.p_char_pf         = NULL;
     char_md.p_user_desc_md    = NULL;
@@ -184,9 +185,9 @@ static uint32_t custom_value_char_add(ble_sml_t * p_sml, const ble_sml_init_t * 
     attr_md.rd_auth    = 0;
     attr_md.wr_auth    = 0;
     attr_md.vlen       = 0;
-
+		
     ble_uuid.type = p_sml->uuid_type;
-    ble_uuid.uuid = CUSTOM_VALUE_CHAR_UUID_1;
+    ble_uuid.uuid = VALUE_CHAR_LOCK_UUID;
 
     memset(&attr_char_value, 0, sizeof(attr_char_value));
 
@@ -194,9 +195,9 @@ static uint32_t custom_value_char_add(ble_sml_t * p_sml, const ble_sml_init_t * 
     attr_char_value.p_attr_md = &attr_md;
     attr_char_value.init_len  = sizeof(uint8_t);
     attr_char_value.init_offs = 0;
-    attr_char_value.max_len   = sizeof(uint8_t);
+    attr_char_value.max_len   = 20;
 
-		BLE_GAP_CONN_SEC_MODE_SET_LESC_ENC_WITH_MITM(&attr_md.read_perm);
+		BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.read_perm);
 		BLE_GAP_CONN_SEC_MODE_SET_LESC_ENC_WITH_MITM(&attr_md.write_perm);
 
     err_code = sd_ble_gatts_characteristic_add(p_sml->service_handle, &char_md,
@@ -208,55 +209,88 @@ static uint32_t custom_value_char_add(ble_sml_t * p_sml, const ble_sml_init_t * 
     }
 		
 		//Lock status characteristic
-		ble_gatts_char_md_t char_md_2;
-    ble_gatts_attr_md_t cccd_md_2;
-    ble_gatts_attr_t    attr_char_value_2;
-    ble_gatts_attr_md_t attr_md_2;
+    memset(&char_md, 0, sizeof(char_md));
 
-    memset(&char_md_2, 0, sizeof(char_md_2));
-
-    char_md_2.char_props.read   = 1;
-    char_md_2.char_props.write  = 0;
-    char_md_2.char_props.notify = 1; 
-    char_md_2.p_char_user_desc  = NULL;
-    char_md_2.p_char_pf         = NULL;
-    char_md_2.p_user_desc_md    = NULL;
-    char_md_2.p_cccd_md         = &cccd_md_2; 
-    char_md_2.p_sccd_md         = NULL;
+    char_md.char_props.read   = 0;
+    char_md.char_props.notify = 1; 
+    char_md.p_char_user_desc  = NULL;
+    char_md.p_char_pf         = NULL;
+    char_md.p_user_desc_md    = NULL;
+    char_md.p_cccd_md         = &cccd_md; 
+    char_md.p_sccd_md         = NULL;
 		
-    memset(&attr_md_2, 0, sizeof(attr_md_2));
+    memset(&attr_md, 0, sizeof(attr_md));
 
-    attr_md_2.read_perm  = p_sml_init->custom_value_char_attr_md.read_perm;
-    attr_md_2.write_perm = p_sml_init->custom_value_char_attr_md.write_perm;
-    attr_md_2.vloc       = BLE_GATTS_VLOC_STACK;
-    attr_md_2.rd_auth    = 0;
-    attr_md_2.wr_auth    = 0;
-    attr_md_2.vlen       = 0;
+    attr_md.read_perm  = p_sml_init->custom_value_char_attr_md.read_perm;
+    attr_md.write_perm = p_sml_init->custom_value_char_attr_md.write_perm;
+    attr_md.vloc       = BLE_GATTS_VLOC_STACK;
+    attr_md.rd_auth    = 0;
+    attr_md.wr_auth    = 0;
+    attr_md.vlen       = 0;
 
     ble_uuid.type = p_sml->uuid_type;
-    ble_uuid.uuid = CUSTOM_VALUE_CHAR_UUID_2;
+    ble_uuid.uuid = VALUE_CHAR_STATUS_UUID;
 
-    memset(&attr_char_value_2, 0, sizeof(attr_char_value_2));
+    memset(&attr_char_value, 0, sizeof(attr_char_value));
 
-    attr_char_value_2.p_uuid    = &ble_uuid;
-    attr_char_value_2.p_attr_md = &attr_md;
-    attr_char_value_2.init_len  = sizeof(uint32_t);
-    attr_char_value_2.init_offs = 0;
-    attr_char_value_2.max_len   = sizeof(uint32_t);
+    attr_char_value.p_uuid    = &ble_uuid;
+    attr_char_value.p_attr_md = &attr_md;
+    attr_char_value.init_len  = sizeof(uint8_t);
+    attr_char_value.init_offs = 0;
+    attr_char_value.max_len   = 4;
 
-		memset(&cccd_md_2, 0, sizeof(cccd_md_2));
+		memset(&cccd_md, 0, sizeof(cccd_md));
 
     //  Read  operation on Cccd should be possible without authentication.
-//    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md_2.read_perm);
-//    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md_2.write_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md_2.read_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_LESC_ENC_WITH_MITM(&cccd_md_2.write_perm);
-
-    cccd_md_2.vloc       = BLE_GATTS_VLOC_STACK;
+    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md.read_perm);
+    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md.write_perm);
+    
+    cccd_md.vloc       = BLE_GATTS_VLOC_STACK;
 		
-    err_code = sd_ble_gatts_characteristic_add(p_sml->service_handle, &char_md_2,
-                                               &attr_char_value_2,
+    err_code = sd_ble_gatts_characteristic_add(p_sml->service_handle, &char_md,
+                                               &attr_char_value,
                                                &p_sml->lock_status_handle);
+    if (err_code != NRF_SUCCESS)
+    {
+        return err_code;
+    }
+		
+		// Finger characteristic
+		memset(&char_md, 0, sizeof(char_md));
+
+    char_md.char_props.write  = 1;
+    char_md.p_char_user_desc  = NULL;
+    char_md.p_char_pf         = NULL;
+    char_md.p_user_desc_md    = NULL;
+    char_md.p_cccd_md         = NULL; 
+    char_md.p_sccd_md         = NULL;
+		
+    memset(&attr_md, 0, sizeof(attr_md));
+
+    attr_md.read_perm  = p_sml_init->custom_value_char_attr_md.read_perm;
+    attr_md.write_perm = p_sml_init->custom_value_char_attr_md.write_perm;
+    attr_md.vloc       = BLE_GATTS_VLOC_STACK;
+    attr_md.rd_auth    = 0;
+    attr_md.wr_auth    = 0;
+    attr_md.vlen       = 0;
+		
+    ble_uuid.type = p_sml->uuid_type;
+    ble_uuid.uuid = VALUE_CHAR_FINGER_UUID;
+
+    memset(&attr_char_value, 0, sizeof(attr_char_value));
+
+    attr_char_value.p_uuid    = &ble_uuid;
+    attr_char_value.p_attr_md = &attr_md;
+    attr_char_value.init_len  = sizeof(uint8_t);
+    attr_char_value.init_offs = 0;
+    attr_char_value.max_len   = 20;
+		
+		BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.read_perm);
+		BLE_GAP_CONN_SEC_MODE_SET_LESC_ENC_WITH_MITM(&attr_md.write_perm);
+
+    err_code = sd_ble_gatts_characteristic_add(p_sml->service_handle, &char_md,
+                                               &attr_char_value,
+                                               &p_sml->finger_print_handle);
     if (err_code != NRF_SUCCESS)
     {
         return err_code;
@@ -278,14 +312,15 @@ uint32_t ble_sml_init(ble_sml_t * p_sml, const ble_sml_init_t * p_sml_init)
     // Initialize service structure
 		p_sml->evt_handler							 = p_sml_init->evt_handler;
     p_sml->conn_handle               = BLE_CONN_HANDLE_INVALID;
-		p_sml->lock_status               = LOCK_CLOSE;
+		
+		p_sml->lock_status               = LOCK_OPEN;
     // Add Custom Service UUID
-    ble_uuid128_t base_uuid = {CUSTOM_SERVICE_UUID_BASE};
+    ble_uuid128_t base_uuid = {SERVICE_UUID_BASE};
     err_code =  sd_ble_uuid_vs_add(&base_uuid, &p_sml->uuid_type);
     VERIFY_SUCCESS(err_code);
     
     ble_uuid.type = p_sml->uuid_type;
-    ble_uuid.uuid = CUSTOM_SERVICE_UUID;
+    ble_uuid.uuid = SERVICE_UUID;
 
     // Add the Custom Service
     err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY, &ble_uuid, &p_sml->service_handle);
@@ -296,11 +331,13 @@ uint32_t ble_sml_init(ble_sml_t * p_sml, const ble_sml_init_t * p_sml_init)
     return custom_value_char_add(p_sml, p_sml_init);;
 }
 
-uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, char * custom_value)
+
+uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, uint8_t * custom_value, uint8_t length)
 {
     NRF_LOG_INFO("In ble_sml_custom_value_update. \r\n"); 
     if (p_sml == NULL)
     {
+				NRF_LOG_ERROR("NRF_ERROR_NULL");
         return NRF_ERROR_NULL;
     }
 
@@ -310,16 +347,20 @@ uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, char * custom_value)
     // Initialize value struct.
     memset(&gatts_value, 0, sizeof(gatts_value));
 
-    gatts_value.len     = sizeof(uint32_t);
+//    gatts_value.len     = sizeof(uint32_t);
+//    gatts_value.offset  = 0;
+//    gatts_value.p_value = (uint8_t *)custom_value;
+		
+		gatts_value.len     = length;
     gatts_value.offset  = 0;
-    gatts_value.p_value = (uint8_t *)custom_value;
-
+    gatts_value.p_value = custom_value;
     // Update database.
     err_code = sd_ble_gatts_value_set(p_sml->conn_handle,
                                       p_sml->lock_status_handle.value_handle,
                                       &gatts_value);
     if (err_code != NRF_SUCCESS)
     {
+				NRF_LOG_ERROR("%d",err_code);
         return err_code;
     }
 
@@ -342,7 +383,6 @@ uint32_t ble_sml_custom_value_update(ble_sml_t * p_sml, char * custom_value)
     {
         err_code = NRF_ERROR_INVALID_STATE;
     }
-
-
+		NRF_LOG_ERROR("%d",err_code);
     return err_code;
 }

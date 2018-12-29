@@ -168,6 +168,7 @@
 .\_build\main.o: ..\..\..\..\..\..\..\components\libraries\pwr_mgmt\nrf_pwr_mgmt.h
 .\_build\main.o: ..\..\..\..\..\..\..\components\ble\nrf_ble_scan\nrf_ble_scan.h
 .\_build\main.o: ..\..\..\ble_sml.h
+.\_build\main.o: ..\..\..\..\..\..\..\components\ble\ble_link_ctx_manager\ble_link_ctx_manager.h
 .\_build\main.o: ..\..\..\..\..\..\..\components\libraries\delay\nrf_delay.h
 .\_build\main.o: ..\..\..\..\..\..\..\components\libraries\log\nrf_log.h
 .\_build\main.o: ..\..\..\..\..\..\..\components\libraries\strerror\nrf_strerror.h

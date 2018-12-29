@@ -27,16 +27,16 @@ NRF_SDH_BLE_OBSERVER(_name ## _obs,                                             
 #define ALARM_RX_VALUE_CHAR_UUID          				0x2503	
 																					
 																									
-#define OPCODE_LENGTH 1
-#define HANDLE_LENGTH 2
+//#define OPCODE_LENGTH 1
+//#define HANDLE_LENGTH 2
 
-/**@brief   Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
-#if defined(NRF_SDH_BLE_GATT_MAX_MTU_SIZE) && (NRF_SDH_BLE_GATT_MAX_MTU_SIZE != 0)
-    #define BLE_NUS_MAX_DATA_LEN (NRF_SDH_BLE_GATT_MAX_MTU_SIZE - OPCODE_LENGTH - HANDLE_LENGTH)
-#else
-    #define BLE_NUS_MAX_DATA_LEN (BLE_GATT_MTU_SIZE_DEFAULT - OPCODE_LENGTH - HANDLE_LENGTH)
-    #warning NRF_SDH_BLE_GATT_MAX_MTU_SIZE is not defined.
-#endif
+///**@brief   Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
+//#if defined(NRF_SDH_BLE_GATT_MAX_MTU_SIZE) && (NRF_SDH_BLE_GATT_MAX_MTU_SIZE != 0)
+//    #define BLE_NUS_MAX_DATA_LEN (NRF_SDH_BLE_GATT_MAX_MTU_SIZE - OPCODE_LENGTH - HANDLE_LENGTH)
+//#else
+//    #define BLE_NUS_MAX_DATA_LEN (BLE_GATT_MTU_SIZE_DEFAULT - OPCODE_LENGTH - HANDLE_LENGTH)
+//    #warning NRF_SDH_BLE_GATT_MAX_MTU_SIZE is not defined.
+//#endif
 
 /**@brief NUS Client event type. */
 typedef enum
@@ -49,9 +49,9 @@ typedef enum
 /**@brief Handles on the connected peer device needed to interact with it. */
 typedef struct
 {
-    uint16_t nus_tx_handle;      /**< Handle of the NUS TX characteristic as provided by a discovery. */
-    uint16_t nus_tx_cccd_handle; /**< Handle of the CCCD of the NUS TX characteristic as provided by a discovery. */
-    uint16_t nus_rx_handle;      /**< Handle of the NUS RX characteristic as provided by a discovery. */
+    uint16_t tx_handle;      /**< Handle of the TX characteristic as provided by a discovery. */
+    uint16_t tx_cccd_handle; /**< Handle of the CCCD of the TX characteristic as provided by a discovery. */
+    uint16_t rx_handle;      /**< Handle of the RX characteristic as provided by a discovery. */
 } ble_alarm_c_handles_t;
 
 /**@brief Structure containing the NUS event data received from the peer. */
@@ -155,7 +155,7 @@ uint32_t ble_alarm_c_tx_notif_enable(ble_alarm_c_t * p_ble_nus_c);
  *
  * @retval NRF_SUCCESS If the string was sent successfully. Otherwise, an error code is returned.
  */
-uint32_t ble_alarm_c_string_send(ble_alarm_c_t * p_ble_nus_c, uint8_t * p_string, uint16_t length);
+uint32_t ble_alarm_c_string_send(ble_alarm_c_t * p_ble_nus_c, uint8_t const * p_string, uint16_t length);
 
 /**@brief Function for assigning handles to a this instance of nus_c.
  *

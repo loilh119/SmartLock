@@ -41,6 +41,9 @@
 .\_build\ble_sml.o: ..\..\..\..\..\..\..\components\libraries\experimental_section_vars\nrf_section_iter.h
 .\_build\ble_sml.o: ..\..\..\..\..\..\..\components\libraries\experimental_section_vars\nrf_section.h
 .\_build\ble_sml.o: ..\..\..\..\..\..\..\components\ble\nrf_ble_gatt\nrf_ble_gatt.h
+.\_build\ble_sml.o: ..\..\..\..\..\..\..\components\ble\ble_link_ctx_manager\ble_link_ctx_manager.h
+.\_build\ble_sml.o: ..\..\..\..\..\..\..\components\ble\common\ble_conn_state.h
+.\_build\ble_sml.o: ..\..\..\..\..\..\..\components\libraries\atomic\nrf_atomic.h
 .\_build\ble_sml.o: ..\..\..\..\..\..\..\modules\nrfx\hal\nrf_gpio.h
 .\_build\ble_sml.o: ..\..\..\..\..\..\..\modules\nrfx\nrfx.h
 .\_build\ble_sml.o: ..\..\..\..\..\..\..\integration\nrfx\nrfx_config.h
@@ -77,3 +80,4 @@
 .\_build\ble_sml.o: ..\..\..\..\..\..\..\modules\nrfx\drivers\include\nrfx_timer.h
 .\_build\ble_sml.o: ..\..\..\..\..\..\..\modules\nrfx\hal/nrf_timer.h
 .\_build\ble_sml.o: ..\..\..\..\..\..\..\components\libraries\delay\nrf_delay.h
+.\_build\ble_sml.o: ..\..\..\..\..\..\..\modules\nrfx\hal\nrf_uart.h

@@ -46,10 +46,10 @@ uint32_t ble_alarm_c_init(ble_alarm_c_t * p_ble_alarm_c, ble_alarm_c_init_t * p_
     uart_uuid.type = p_ble_alarm_c->uuid_type;
     uart_uuid.uuid = CUSTOM_SERVICE_CENTRAL_UUID;
 
-    p_ble_alarm_c->conn_handle           = BLE_CONN_HANDLE_INVALID;
-    p_ble_alarm_c->evt_handler           = p_ble_alarm_c_init->evt_handler;
-    p_ble_alarm_c->handles.nus_tx_handle = BLE_GATT_HANDLE_INVALID;
-    p_ble_alarm_c->handles.nus_rx_handle = BLE_GATT_HANDLE_INVALID;
+    p_ble_alarm_c->conn_handle       = BLE_CONN_HANDLE_INVALID;
+    p_ble_alarm_c->evt_handler       = p_ble_alarm_c_init->evt_handler;
+    p_ble_alarm_c->handles.tx_handle = BLE_GATT_HANDLE_INVALID;
+    p_ble_alarm_c->handles.rx_handle = BLE_GATT_HANDLE_INVALID;
 		
     return ble_db_discovery_evt_register(&uart_uuid);
 }
@@ -82,12 +82,12 @@ void ble_alarm_c_on_db_disc_evt(ble_alarm_c_t * p_ble_alarm_c, ble_db_discovery_
             switch (p_chars[i].characteristic.uuid.uuid)
             {
 								case ALARM_TX_VALUE_CHAR_UUID:
-										alarm_c_evt.handles.nus_tx_handle = p_chars[i].characteristic.handle_value;
-										alarm_c_evt.handles.nus_tx_cccd_handle = p_chars[i].cccd_handle;
+										alarm_c_evt.handles.tx_handle = p_chars[i].characteristic.handle_value;
+										alarm_c_evt.handles.tx_cccd_handle = p_chars[i].cccd_handle;
                     break;
 								
 								case ALARM_RX_VALUE_CHAR_UUID:
-										alarm_c_evt.handles.nus_rx_handle = p_chars[i].characteristic.handle_value;
+										alarm_c_evt.handles.rx_handle = p_chars[i].characteristic.handle_value;
 										break;
 								
                 default:
@@ -217,12 +217,12 @@ uint32_t ble_alarm_c_tx_notif_enable(ble_alarm_c_t * p_ble_alarm_c)
     VERIFY_PARAM_NOT_NULL(p_ble_alarm_c);
 
     if ( (p_ble_alarm_c->conn_handle == BLE_CONN_HANDLE_INVALID)
-       ||(p_ble_alarm_c->handles.nus_tx_cccd_handle == BLE_GATT_HANDLE_INVALID)
+       ||(p_ble_alarm_c->handles.tx_cccd_handle == BLE_GATT_HANDLE_INVALID)
        )
     {
         return NRF_ERROR_INVALID_STATE;
     }
-    return cccd_configure(p_ble_alarm_c->conn_handle,p_ble_alarm_c->handles.nus_tx_cccd_handle, true);
+    return cccd_configure(p_ble_alarm_c->conn_handle,p_ble_alarm_c->handles.tx_cccd_handle, true);
 }
 
 /**@brief Function for sending a string to the server.
@@ -235,26 +235,21 @@ uint32_t ble_alarm_c_tx_notif_enable(ble_alarm_c_t * p_ble_alarm_c)
  *
  * @retval NRF_SUCCESS If the string was sent successfully. Otherwise, an error code is returned.
  */
-uint32_t ble_alarm_c_string_send(ble_alarm_c_t * p_ble_alarm_c, uint8_t * p_string, uint16_t length)
+uint32_t ble_alarm_c_string_send(ble_alarm_c_t * p_ble_alarm_c, uint8_t const * p_string, uint16_t length)
 {
     VERIFY_PARAM_NOT_NULL(p_ble_alarm_c);
 
-    if (length > BLE_NUS_MAX_DATA_LEN)
-    {
-        NRF_LOG_INFO("Content too long.");
-        return NRF_ERROR_INVALID_PARAM;
-    }
     if (p_ble_alarm_c->conn_handle == BLE_CONN_HANDLE_INVALID)
     {
         NRF_LOG_INFO("Connection handle invalid.");
         return NRF_ERROR_INVALID_STATE;
     }
-
+		
     ble_gattc_write_params_t const write_params =
     {
         .write_op = BLE_GATT_OP_WRITE_CMD,
         .flags    = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE,
-        .handle   = p_ble_alarm_c->handles.nus_rx_handle,
+        .handle   = p_ble_alarm_c->handles.rx_handle,
         .offset   = 0,
         .len      = length,
         .p_value  = p_string
@@ -289,9 +284,9 @@ uint32_t ble_alarm_c_handles_assign(ble_alarm_c_t               * p_ble_alarm_c,
     p_ble_alarm_c->conn_handle = conn_handle;
     if (p_peer_handles != NULL)
     {
-				p_ble_alarm_c->handles.nus_tx_handle			= p_peer_handles->nus_tx_handle;
-        p_ble_alarm_c->handles.nus_tx_cccd_handle = p_peer_handles->nus_tx_cccd_handle;
-        p_ble_alarm_c->handles.nus_rx_handle      = p_peer_handles->nus_rx_handle;
+				p_ble_alarm_c->handles.tx_handle			= p_peer_handles->tx_handle;
+        p_ble_alarm_c->handles.tx_cccd_handle = p_peer_handles->tx_cccd_handle;
+        p_ble_alarm_c->handles.rx_handle      = p_peer_handles->rx_handle;
     }
     return NRF_SUCCESS;
 }

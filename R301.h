@@ -69,6 +69,7 @@ static uint8_t StoreTemp2[15]    = {0xEF,0x01,0xFF,0xFF,0xFF,0xFF,COMMAND,0x00,0
 static uint8_t SearchLibrary1[17]= {0xEF,0x01,0xFF,0xFF,0xFF,0xFF,COMMAND,0x00,0x08,Search,CharBuffer1,0x00,0x00,0x00,0x00,0x00,0x0E};
 static uint8_t SearchLibrary2[17]= {0xEF,0x01,0xFF,0xFF,0xFF,0xFF,COMMAND,0x00,0x08,Search,CharBuffer2,0x00,0x00,0x00,0x00,0x00,0x0F};
 static uint8_t LibEmpty[12]      = {0xEF,0x01,0xFF,0xFF,0xFF,0xFF,COMMAND,0x00,0x03,Empty,0x00,0x11};
+static uint8_t DeletTemplate[16] = {0xEF,0x01,0xFF,0xFF,0xFF,0xFF,COMMAND,0x00,0x07,DeletChar,0x00,0x00,0x00,0x01,0x00,0x00};
 /********** Type definition section *******************************************/
 /********** Macro definition section*******************************************/
 /********** Function declaration section **************************************/
@@ -83,9 +84,10 @@ uint16_t Get_Temp_Num(void);
 void Valid_Template_Number(void);
 void Generate_Template(void);
 void Store_Template(uint8_t CharID, uint16_t Page_ID);
-void Search_Finger(uint8_t CharID, uint16_t Page_Num);
+void Search_Finger(uint8_t CharID, uint16_t Start_Page, uint16_t Page_Num);
 void Library_Empty(void);
 int check_sum(int byte_num, int byte);
+void Delete_Template(uint16_t Page_ID);
 #ifdef __cplusplus
 }
 #endif

@@ -25,6 +25,7 @@
 ".\_build\pm_buffer.o"
 ".\_build\security_dispatcher.o"
 ".\_build\security_manager.o"
+".\_build\ble_link_ctx_manager.o"
 ".\_build\ble_sml.o"
 ".\_build\ble_alarm_c.o"
 ".\_build\nrf_crypto_aead.o"
