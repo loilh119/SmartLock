@@ -56,7 +56,7 @@
 
 // <s> DEVICE_NAME - Name of device. Will be included in the advertising data.
 #ifndef DEVICE_NAME
-#define DEVICE_NAME "SmartLock"
+#define DEVICE_NAME "SMARTLOCK-001"
 #endif
 
 // </h> 

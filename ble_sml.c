@@ -91,13 +91,13 @@ static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 					evt.params.sml_data.length = p_evt_write->len;
 					p_sml->evt_handler(p_sml, &evt);
 			}				
-			else
-			{
-					evt.evt_type               = BLE_SML_EVT;
-					evt.params.sml_data.p_data = p_evt_write->data;
-					evt.params.sml_data.length = p_evt_write->len;
-					p_sml->evt_handler(p_sml, &evt);
-			}
+//			else
+//			{
+//					evt.evt_type               = BLE_SML_EVT;
+//					evt.params.sml_data.p_data = p_evt_write->data;
+//					evt.params.sml_data.length = p_evt_write->len;
+//					p_sml->evt_handler(p_sml, &evt);
+//			}
     }
 		else if ((p_evt_write->handle == p_sml->finger_print_handle.value_handle) &&
              (p_sml->evt_handler != NULL))
@@ -124,10 +124,6 @@ static void on_write(ble_sml_t * p_sml, ble_evt_t const * p_ble_evt)
 					p_sml->evt_handler(p_sml, &evt);
 					break;
 				default:
-					evt.evt_type               = BLE_SML_EVT;
-					evt.params.sml_data.p_data = p_evt_write->data;
-					evt.params.sml_data.length = p_evt_write->len;
-					p_sml->evt_handler(p_sml, &evt);
 					break;
 			}
 		}

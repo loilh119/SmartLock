@@ -32,6 +32,7 @@
 
 #include "ble_alarm_c.h"
 #include "SSD1306.h"
+#include "Fonts.h"
 #include "nrf_drv_gpiote.h"
 #include "app_uart.h"
 #include "nrf_uart.h"
@@ -98,6 +99,7 @@ static volatile bool delete_finger_act = false;
 static volatile bool lock_act = false;
 static volatile bool lock_button = false;
 static volatile uint16_t Template_ID = 0;
+static volatile uint8_t Finger_Page_Num = 1;
 static int check = 0;
 
 NRF_BLE_GATT_DEF(m_gatt);                                                   /**< GATT module instance. */
@@ -139,7 +141,7 @@ static char * roles_str[] =
 /**@brief Names that the central application scans for, and that are advertised by the peripherals.
  *  If these are set to empty strings, the UUIDs defined below are used.
  */
-static const char m_target_periph_name[] = "Alarm";
+static const char m_target_periph_name[] = "ALARM-001";
 
 
 /**@brief UUIDs that the central application scans for if the name above is set to an empty string,
@@ -497,10 +499,10 @@ static void on_ble_evt(uint16_t conn_handle, ble_evt_t const * p_ble_evt)
                          nrf_log_push((char*)passkey),
                          p_ble_evt->evt.gap_evt.params.passkey_display.match_request);
 												 
-//						ssd1306_clear_screen(0x00);
-//						ssd1306_display_string(32, 14, "PASS KEY", 16, 1);						 
-//						ssd1306_display_string(37, 31, (char*)passkey, 16, 1);
-//						ssd1306_refresh_gram();
+						ssd1306_clear_screen(0x00);
+						ssd1306_display_string(32, 14, "PASS KEY", 16, 1);						 
+						ssd1306_display_string(37, 31, (char*)passkey, 16, 1);
+						ssd1306_refresh_gram();
 												 
             if (p_ble_evt->evt.gap_evt.params.passkey_display.match_request)
             {
@@ -872,29 +874,25 @@ static void on_num_comp_button_press(bool accept)
     {
         num_comp_reply(m_conn_handle_num_comp_central, accept);
         m_conn_handle_num_comp_central = BLE_CONN_HANDLE_INVALID;
-				
-//				if(accept == true)
-//				{
-//						ssd1306_clear_screen(0x00);
-//						ssd1306_display_string(32, 20, "ACCEPT", 16, 1);						 
-//						ssd1306_refresh_gram();
-//						ssd1306_clear_screen(0x00);
-//				}
-//				else if(accept == false)
-//				{
-//						ssd1306_clear_screen(0x00);
-//						ssd1306_display_string(32, 20, "REJECT", 16, 1);						 
-//						ssd1306_refresh_gram();
-//						ssd1306_clear_screen(0x00);
-//				}
     }
     else if (m_conn_handle_num_comp_peripheral != BLE_CONN_HANDLE_INVALID)
     {
-//			NRF_LOG_INFO("debug 1");
+				if(accept == true)
+				{
+						ssd1306_clear_screen(0x00);
+						ssd1306_display_string(32, 20, "ACCEPT", 16, 1);						 
+						ssd1306_refresh_gram();
+						ssd1306_clear_screen(0x00);
+				}
+				else if(accept == false)
+				{
+						ssd1306_clear_screen(0x00);
+						ssd1306_display_string(32, 20, "REJECT", 16, 1);						 
+						ssd1306_refresh_gram();
+						ssd1306_clear_screen(0x00);
+				}
         num_comp_reply(m_conn_handle_num_comp_peripheral, accept);
-//			NRF_LOG_INFO("debug 2");
         m_conn_handle_num_comp_peripheral = BLE_CONN_HANDLE_INVALID;
-//			NRF_LOG_INFO("debug 3");
     }
 }
 
@@ -958,13 +956,7 @@ static void buttons_leds_init(bool * p_erase_bonds)
 {
     ret_code_t err_code;
     bsp_event_t startup_event;
-	
-//		nrf_gpio_cfg_output(LED_3);
-//		nrf_gpio_cfg_output(LED_2);
-//		nrf_gpio_cfg_output(LED_4);
-	
-		nrf_gpio_cfg_input(25, NRF_GPIO_PIN_PULLDOWN);
-	
+		
 		nrf_gpio_cfg_output(28);
 		nrf_gpio_pin_clear(28);
 	
@@ -1434,7 +1426,7 @@ static void scan_int_handler(void * p_context)
 						check = 1;
 						break;
 					case 2:
-						Search_Finger(1, 1, 50);
+						Search_Finger(1, 1, 200);
 						check = 2;
 						break;		
 					default:
@@ -1467,7 +1459,7 @@ static void scan_int_handler(void * p_context)
 						Template_ID = Get_Temp_Num();
 					
 						status_confirm_finger = 0;
-
+					
 						nrf_gpio_pin_set(28);
 						m_sml.lock_status = LOCK_OPEN;
 						
@@ -1478,32 +1470,31 @@ static void scan_int_handler(void * p_context)
 						data_send[0] = 'p';
 						data_send[1] = 0x0D;
 						send_alarm(2);
-					
+
 						err_code = app_timer_stop(scan_int);
 						APP_ERROR_CHECK(err_code);
 
 						err_code = app_timer_start(lock, LOCK_TIMER, NULL);
 						APP_ERROR_CHECK(err_code);
-						
 						break;
 					
 					case 0x09:
 						check = 0;
-						
+							
 						status_confirm_finger = 0;
-					
+						
 						lock_act = false;
 						scan_int_act = false;
 						scan_finger_act = false;
 						delete_finger_act = false;
 						lock_button = false;
-					
+						
 						m_sml.lock_status = LOCK_CLOSE;
-					
+							
 						err_code = app_timer_stop(scan_int);
 						APP_ERROR_CHECK(err_code);
 						break;
-					
+						
 					case -1:
 						break;
 					
@@ -1518,6 +1509,7 @@ static void scan_int_handler(void * p_context)
 						delete_finger_act = false;
 						lock_button = false;
 					
+						m_sml.lock_status = LOCK_CLOSE;
 						err_code = app_timer_stop(scan_int);
 						APP_ERROR_CHECK(err_code);
 						check = 0;
@@ -1592,17 +1584,17 @@ static void on_sml_evt(ble_sml_t * p_sml_service, ble_sml_evt_t * p_evt)
     switch(p_evt->evt_type)
     {
         case BLE_SML_EVT_CONNECTED:
-//						ssd1306_clear_screen(0x00);
-//						ssd1306_display_string(25, 20, "CONNECTING", 16, 1);						 
-//						ssd1306_refresh_gram();
-//						ssd1306_clear_screen(0x00);
+						ssd1306_clear_screen(0x00);
+						ssd1306_display_string(25, 20, "CONNECTING", 16, 1);						 
+						ssd1306_refresh_gram();
+						ssd1306_clear_screen(0x00);
             break;
 
         case BLE_SML_EVT_DISCONNECTED:
-//						ssd1306_clear_screen(0x00);
-//						ssd1306_display_string(25, 20, "DISCONNECT", 16, 1);	
-//						ssd1306_refresh_gram();
-//						ssd1306_clear_screen(0x00);
+						ssd1306_clear_screen(0x00);
+						ssd1306_display_string(25, 20, "DISCONNECT", 16, 1);	
+						ssd1306_refresh_gram();
+						ssd1306_clear_screen(0x00);
             break;
 				
 				case BLE_SML_EVT_NOTIFICATION_ENABLED:
@@ -1686,19 +1678,21 @@ static void on_sml_evt(ble_sml_t * p_sml_service, ble_sml_evt_t * p_evt)
 					scan_finger_act = false;
 					delete_finger_act = false;
 					lock_button = false;
+					
+					ssd1306_clear_screen(0x00);
 				
 					err_code = app_timer_stop_all();
 					APP_ERROR_CHECK(err_code);
 					break;
 				
-				case BLE_SML_EVT:
-					data_length = get_data(p_evt);
-				
-					template_id_send[0] = 0x00;
-					template_id_send[1] = 0x00;
-				
-					send_alarm(data_length);
-					break;
+//				case BLE_SML_EVT:
+//					data_length = get_data(p_evt);
+//				
+//					template_id_send[0] = 0x00;
+//					template_id_send[1] = 0x00;
+//				
+//					send_alarm(data_length);
+//					break;
         default:
               // No implementation needed.
               break;
@@ -1822,11 +1816,12 @@ int main(void)
 {
     bool erase_bonds;
     // Initialize.
-//		twi_init();
-//		ssd1306_init(); 
-//		ssd1306_clear_screen(0x00);
+		twi_init();
+		ssd1306_init(); 
+		ssd1306_clear_screen(0x00);
 //		ssd1306_display_string(25, 20, "SMART LOCK", 16, 1);
-//		ssd1306_refresh_gram();
+		ssd1306_draw_bitmap(0 , 20, &Capture[0], 128, 24);
+		ssd1306_refresh_gram();
 		lfclk_request();
     timer_init();
 	

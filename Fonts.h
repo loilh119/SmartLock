@@ -22,7 +22,7 @@ extern const uint8_t c_chBluetooth88[8];
 extern const uint8_t c_chBat816[16];
 extern const uint8_t c_chGPRS88[8];
 extern const uint8_t c_chAlarm88[8];
-extern const unsigned char codeProject_logo [];
+extern const uint8_t Capture[];
 
 #endif
 
